@@ -92,7 +92,10 @@
     --bg:#f5f3ee; --panel:#fffdf8; --ink:#2c2620; --sub:#6b6256;
     --line:#ddd5c7; --accent:#7a5c3e; --accent2:#9c7a4f;
     --pos:#b4452f; --neg:#3f6b52; --chip:#efe9dc; --hi:#f6efe0;
+    --fs:1;                /* 文字サイズ倍率（A-/A+で変化） */
   }
+  /* rem基準のレイアウトを一括拡縮（ルートのfont-sizeを倍率で変更） */
+  html{font-size:calc(100% * var(--fs))}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
     font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,system-ui,sans-serif;
@@ -212,6 +215,14 @@
     padding:7px 9px;font-size:.84rem;font-family:inherit;background:#fff}
   .vedit textarea{min-height:54px;resize:vertical}
   .mini{font-size:.78rem;padding:6px 12px}
+  /* 文字サイズ調整 */
+  .fs-ctrl{display:inline-flex;align-items:center;gap:5px}
+  .fs-ctrl button{width:30px;height:30px;border:1px solid var(--accent);background:transparent;border-radius:7px;
+    color:var(--accent);font-weight:700;cursor:pointer;line-height:1;transition:.15s;font-family:inherit;padding:0}
+  .fs-ctrl button:hover{background:var(--hi)}
+  .fs-ctrl button:active{background:var(--accent);color:#fff}
+  .fs-ctrl .fs-minus{font-size:12px}.fs-ctrl .fs-plus{font-size:16px}
+  .fs-ctrl .fs-label{font-size:.7rem;color:var(--sub);min-width:28px;text-align:center}
   .info{background:var(--hi);border:1px solid var(--line);border-radius:10px;padding:10px 13px;font-size:.8rem;color:var(--sub);margin-bottom:12px}
   .info b{color:var(--accent)}
   .pill{display:inline-block;background:var(--chip);border-radius:20px;padding:3px 11px;font-size:.76rem;color:var(--accent);margin:2px 4px 2px 0}
@@ -297,6 +308,11 @@
   <div class="ver-row">
     <button class="btn-ghost mini" id="openEditBtn" onclick="openEditor()">⚙ データ編集・表示設定</button>
     <button class="btn-ghost mini" onclick="window.open('./manual.html','_blank')">📖 使用説明書</button>
+    <div class="fs-ctrl" style="margin-left:auto">
+      <button class="fs-minus" id="fsMinus" title="文字を小さく" aria-label="文字を小さく">A−</button>
+      <span class="fs-label" id="fsLabel">標準</span>
+      <button class="fs-plus" id="fsPlus" title="文字を大きく" aria-label="文字を大きく">A＋</button>
+    </div>
   </div>
 </header>
 
@@ -482,6 +498,24 @@
 </div>
 
 <script>
+/* ===== 文字サイズ調整（A-/A+）：ルートfont-sizeを倍率変更し localStorage に保存 ===== */
+(function(){
+  const fsSteps=[0.85,1.0,1.15,1.3,1.45];
+  const fsNames=['小','標準','大','特大','最大'];
+  const FS_KEY='bensho-fs-idx';
+  let fsIdx=1;
+  try{ const s=parseInt(localStorage.getItem(FS_KEY),10); if(!isNaN(s)&&s>=0&&s<fsSteps.length) fsIdx=s; }catch(e){}
+  function applyFs(){
+    document.documentElement.style.setProperty('--fs', fsSteps[fsIdx]);
+    const lbl=document.getElementById('fsLabel'); if(lbl) lbl.textContent=fsNames[fsIdx];
+    try{ localStorage.setItem(FS_KEY, fsIdx); }catch(e){}
+  }
+  const minus=document.getElementById('fsMinus'), plus=document.getElementById('fsPlus');
+  if(minus) minus.onclick=()=>{ if(fsIdx>0){ fsIdx--; applyFs(); } };
+  if(plus)  plus.onclick=()=>{ if(fsIdx<fsSteps.length-1){ fsIdx++; applyFs(); } };
+  applyFs();
+})();
+
 /* ============================================================
    症状マスタ
    ============================================================ */

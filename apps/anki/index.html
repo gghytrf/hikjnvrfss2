@@ -3668,7 +3668,10 @@ homeBtn.onclick=()=>showView('viewHome');
 /* ===== 文字サイズ調整（A-/A+）：--fsと連動して枠高も拡縮 ===== */
 const fsSteps=[0.85,1.0,1.15,1.3,1.45];
 const fsNames=['小','標準','大','特大','最大'];
+const FS_KEY='anki-fs-idx';
 let fsIdx=1;
+// 保存値を復元（範囲外・不正値は標準=1にフォールバック）
+try{ const s=parseInt(localStorage.getItem(FS_KEY),10); if(!isNaN(s)&&s>=0&&s<fsSteps.length) fsIdx=s; }catch(e){}
 function applyFs(){
   const f=fsSteps[fsIdx];
   const root=document.documentElement.style;
@@ -3679,6 +3682,7 @@ function applyFs(){
   root.setProperty('--card-h', (320*f)+'px');
   root.setProperty('--mrow-h', (60*f)+'px');
   document.getElementById('fsLabel').textContent=fsNames[fsIdx];
+  try{ localStorage.setItem(FS_KEY, fsIdx); }catch(e){}
 }
 document.getElementById('fsMinus').onclick=()=>{if(fsIdx>0){fsIdx--;applyFs();}};
 document.getElementById('fsPlus').onclick=()=>{if(fsIdx<fsSteps.length-1){fsIdx++;applyFs();}};

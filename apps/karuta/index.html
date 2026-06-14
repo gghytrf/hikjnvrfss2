@@ -96,7 +96,11 @@
     --muted:     #8a7e6e;
     --highlight: #f0e8d0;
     --rand:      #2a5880;
+    --fs:        1;          /* 文字サイズ倍率（A-/A+で変化） */
   }
+
+  /* rem基準のレイアウトを一括拡縮（ルートのfont-sizeを倍率で変更） */
+  html { font-size: calc(100% * var(--fs)); }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -116,7 +120,23 @@
     color: var(--paper);
     padding: 18px 24px 14px;
     text-align: center;
+    position: relative;
   }
+  /* 文字サイズ調整（ダーク背景ヘッダー右上） */
+  .fs-ctrl {
+    position: absolute; top: 12px; right: 12px;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .fs-ctrl button {
+    width: 28px; height: 28px; border: 1px solid rgba(245,240,232,.45);
+    background: rgba(245,240,232,.1); border-radius: 7px; color: var(--paper);
+    font-weight: 600; cursor: pointer; line-height: 1; transition: .15s;
+    font-family: 'Noto Serif JP', serif; padding: 0;
+  }
+  .fs-ctrl button:hover { background: rgba(245,240,232,.22); }
+  .fs-ctrl button:active { background: var(--paper); color: var(--ink); }
+  .fs-ctrl .fs-minus { font-size: 11px; } .fs-ctrl .fs-plus { font-size: 15px; }
+  .fs-ctrl .fs-label { font-size: .62rem; color: var(--line); min-width: 26px; text-align: center; }
   header h1 {
     font-family: 'Noto Serif JP', serif;
     font-size: 1.5rem;
@@ -380,6 +400,11 @@
 <header>
   <h1>五 行 穴</h1>
   <p>井・榮・兪・経・合 — 全60穴 読み上げ</p>
+  <div class="fs-ctrl">
+    <button class="fs-minus" id="fsMinus" title="文字を小さく" aria-label="文字を小さく">A−</button>
+    <span class="fs-label" id="fsLabel">標準</span>
+    <button class="fs-plus" id="fsPlus" title="文字を大きく" aria-label="文字を大きく">A＋</button>
+  </div>
 </header>
 <div class="wuxing-bar">
   <span class="wood"></span><span class="fire"></span><span class="earth"></span><span class="metal"></span><span class="water"></span>
@@ -467,6 +492,26 @@
 </div>
 
 <script>
+// ──────────────────────────────────────────
+// 文字サイズ調整（A-/A+）：ルートfont-sizeを倍率変更し localStorage に保存
+// ──────────────────────────────────────────
+(function(){
+  const fsSteps=[0.85,1.0,1.15,1.3,1.45];
+  const fsNames=['小','標準','大','特大','最大'];
+  const FS_KEY='karuta-fs-idx';
+  let fsIdx=1;
+  try{ const s=parseInt(localStorage.getItem(FS_KEY),10); if(!isNaN(s)&&s>=0&&s<fsSteps.length) fsIdx=s; }catch(e){}
+  function applyFs(){
+    document.documentElement.style.setProperty('--fs', fsSteps[fsIdx]);
+    const lbl=document.getElementById('fsLabel'); if(lbl) lbl.textContent=fsNames[fsIdx];
+    try{ localStorage.setItem(FS_KEY, fsIdx); }catch(e){}
+  }
+  const minus=document.getElementById('fsMinus'), plus=document.getElementById('fsPlus');
+  if(minus) minus.onclick=()=>{ if(fsIdx>0){ fsIdx--; applyFs(); } };
+  if(plus)  plus.onclick=()=>{ if(fsIdx<fsSteps.length-1){ fsIdx++; applyFs(); } };
+  applyFs();
+})();
+
 // ──────────────────────────────────────────
 // 読み方テーブル
 // ──────────────────────────────────────────
