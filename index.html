@@ -1,6 +1,85 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+<script>
+/* ===== 統合アプリ用ガード（iframe内のみ動作）=====
+   iframe 内で動くとき、各アプリ独自の Service Worker 登録／キャッシュ操作／
+   バージョン確認を無効化し、キャッシュとバージョン管理を親（統合ホーム）へ
+   一元化します。localStorage（学習データ・カルテ等）はそのまま使えます。 */
+(function(){
+  try{
+    if (window.top === window.self) return; // 単体起動時は何もしない（以下はiframe内のみ）
+
+    // 1) Service Worker を無害なスタブに
+    var swStub = {
+      register:function(){ return Promise.reject(new Error('SW disabled in integrated app')); },
+      getRegistration:function(){ return Promise.resolve(undefined); },
+      getRegistrations:function(){ return Promise.resolve([]); },
+      addEventListener:function(){}, removeEventListener:function(){},
+      get controller(){ return null; },
+      ready:new Promise(function(){})
+    };
+    try{ Object.defineProperty(navigator,'serviceWorker',{get:function(){return swStub;},configurable:true}); }catch(e){}
+
+    // 2) Cache Storage を無効化（子アプリが親のキャッシュを消さないように）
+    var noop0=function(){return Promise.resolve();};
+    function neutralizeCaches(){
+      try{
+        var cacheStub={
+          open:function(){return Promise.resolve({addAll:noop0,add:noop0,put:noop0,
+            match:function(){return Promise.resolve(undefined);},delete:function(){return Promise.resolve(false);},
+            keys:function(){return Promise.resolve([]);}});},
+          keys:function(){return Promise.resolve([]);},
+          delete:function(){return Promise.resolve(false);},
+          match:function(){return Promise.resolve(undefined);},
+          has:function(){return Promise.resolve(false);}
+        };
+        try{ Object.defineProperty(window,'caches',{get:function(){return cacheStub;},configurable:true}); }
+        catch(e){
+          if(window.caches){
+            try{ window.caches.keys=function(){return Promise.resolve([]);}; }catch(_){}
+            try{ window.caches.delete=function(){return Promise.resolve(false);}; }catch(_){}
+            try{ window.caches.open=cacheStub.open; }catch(_){}
+          }
+        }
+      }catch(e){}
+    }
+    neutralizeCaches();
+
+    // 3) アプリ独自の「更新」ボタンを隠す（親の「更新確認」に一本化）
+    var css='#updBtn,#verLabel{display:none !important;}';
+    function injectCss(){ try{ var s=document.createElement('style'); s.textContent=css; (document.head||document.documentElement).appendChild(s);}catch(e){} }
+    if(document.head){ injectCss(); }
+    else { document.addEventListener('DOMContentLoaded', injectCss); }
+  }catch(e){}
+})();
+
+/* ===== コピー無効化（コンテンツ保護）===== 常時動作（iframe内外問わず）
+   .selectable クラスの要素（メールアドレス等）は選択・コピーを許可。 */
+(function(){
+  var cpCss = document.createElement('style');
+  cpCss.textContent =
+    'html{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;' +
+    '-webkit-touch-callout:none;}' +
+    'input,textarea,[contenteditable="true"],[contenteditable=""],.selectable{' +
+    '-webkit-user-select:text !important;-moz-user-select:text !important;' +
+    '-ms-user-select:text !important;user-select:text !important;-webkit-touch-callout:default !important;}';
+  (document.head||document.documentElement).appendChild(cpCss);
+  function isAllowed(t){
+    if(!t) return false;
+    var tag=(t.tagName||'').toLowerCase();
+    if(tag==='input'||tag==='textarea') return true;
+    if(t.isContentEditable) return true;
+    // selectable クラスを持つ要素またはその子孫
+    if(t.closest && t.closest('.selectable')) return true;
+    return false;
+  }
+  document.addEventListener('contextmenu', function(e){ if(!isAllowed(e.target)) e.preventDefault(); }, {capture:true});
+  document.addEventListener('copy',      function(e){ if(!isAllowed(e.target)) e.preventDefault(); }, {capture:true});
+  document.addEventListener('cut',       function(e){ if(!isAllowed(e.target)) e.preventDefault(); }, {capture:true});
+  document.addEventListener('dragstart', function(e){ if(!isAllowed(e.target)) e.preventDefault(); }, {capture:true});
+})();
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>東洋医学 学習スイート</title>
@@ -95,13 +174,6 @@
   .home-foot{margin-top:26px;display:flex;align-items:center;justify-content:space-between;
     flex-wrap:wrap;gap:10px;padding-top:16px;border-top:1px dashed var(--line)}
   .ver{font-size:calc(11px*var(--fs));color:#8a7d63;letter-spacing:.04em}
-  .btn-upd{border:1px solid var(--line);background:#fff;color:var(--indigo);font:inherit;font-size:12px;
-    font-weight:700;padding:8px 14px;border-radius:9px;cursor:pointer;letter-spacing:.04em;
-    display:inline-flex;align-items:center;gap:6px;transition:.18s}
-  .btn-upd:hover{background:var(--paper2)}
-  .btn-upd.has-update{border-color:var(--cinnabar);color:var(--cinnabar);animation:blink 1.1s infinite}
-  @keyframes blink{50%{opacity:.45}}
-  .btn-upd.checking{opacity:.6;pointer-events:none}
   .credit{margin-top:16px;padding-top:14px;border-top:1px dashed var(--line);text-align:center;
     font-size:calc(11px*var(--fs));color:#8a7d63;line-height:1.7;letter-spacing:.02em}
   .credit-name{font-weight:500}
@@ -139,29 +211,8 @@
     box-shadow:0 6px 20px rgba(0,0,0,.3);opacity:0;pointer-events:none;transition:.3s;z-index:300;max-width:88vw;text-align:center}
   #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-  /* ===== オフライン48時間ロック画面 ===== */
-  #lock{position:fixed;inset:0;z-index:500;display:none;flex-direction:column;align-items:center;justify-content:center;
-    text-align:center;padding:32px 26px;background:var(--paper);
-    background-image:
-      radial-gradient(circle at 50% 28%, rgba(176,58,46,.07), transparent 55%),
-      repeating-linear-gradient(0deg, transparent, transparent 28px, rgba(168,130,74,.03) 28px, rgba(168,130,74,.03) 29px);}
-  #lock.show{display:flex}
-  #lock .seal{font-family:'Shippori Mincho',serif;font-weight:800;background:var(--cinnabar);color:var(--paper);
-    width:62px;height:62px;display:grid;place-items:center;border-radius:10px;font-size:32px;
-    box-shadow:3px 3px 0 var(--cinnabar-d);transform:rotate(-2deg);margin-bottom:24px}
-  #lock h2{font-family:'Shippori Mincho',serif;font-size:calc(21px*var(--fs));font-weight:800;letter-spacing:.04em;margin-bottom:14px;line-height:1.4}
-  #lock p{font-size:calc(13.5px*var(--fs));color:#5f5645;line-height:1.85;max-width:30em;margin-bottom:9px}
-  #lock .meta{font-size:calc(12px*var(--fs));color:#8a7d63;margin-top:6px;letter-spacing:.03em}
-  #lock .status{margin-top:22px;display:inline-flex;align-items:center;gap:9px;font-size:calc(13px*var(--fs));font-weight:700;
-    color:var(--cinnabar);border:1px solid var(--line);background:#fff;padding:10px 18px;border-radius:10px}
-  #lock .dot{width:9px;height:9px;border-radius:50%;background:var(--cinnabar);animation:pulse 1.3s infinite}
-  @keyframes pulse{50%{opacity:.3}}
-  #lock .retry{margin-top:18px;border:1px solid var(--line);background:#fff;color:var(--indigo);font:inherit;
-    font-size:calc(13px*var(--fs));font-weight:700;padding:10px 20px;border-radius:10px;cursor:pointer;letter-spacing:.04em}
-  #lock .retry:hover{background:var(--paper2)}
-
   /* ===== 横向き（landscape）スマホ最適化 =====
-     縦の余白を詰め、2列以上のカードで横幅を活用。ロック画面はスクロール可に。 */
+     縦の余白を詰め、2列以上のカードで横幅を活用。 */
   @media (orientation:landscape) and (max-height:520px){
     #home{padding:max(14px,env(safe-area-inset-top)) max(18px,env(safe-area-inset-left)) 28px max(18px,env(safe-area-inset-right));max-width:none}
     .brand{margin:4px 2px 2px}
@@ -174,9 +225,6 @@
     .card .glyph{font-size:24px;margin-bottom:5px}
     .card .desc{padding:10px 16px 10px}
     .card .go{padding:0 16px 12px}
-    #lock{justify-content:flex-start;overflow-y:auto;padding:24px}
-    #lock .seal{width:48px;height:48px;font-size:24px;margin-bottom:14px}
-    #lock h2{font-size:calc(18px*var(--fs))}
   }
   /* 横向きでも1列に潰れないよう、520px幅での1列指定を上書き */
   @media (orientation:landscape) and (max-width:520px) and (max-height:520px){
@@ -199,7 +247,7 @@
       <button class="btn-manual-home" onclick="window.open('./manual.html','_blank')" title="使用説明書">📖 説明書</button>
     </div>
   </div>
-  <p class="lead">学習したいアプリを選んでください。各アプリの学習データ・カルテはこれまで通り端末内に保存され、引き続き使えます。</p>
+  <p class="lead">学習したいアプリを選んでください。学習履歴・カルテなどはこれまで通り端末内に保存されます。問題・経穴データは毎回サーバーから取得します（オンライン接続が必要です）。</p>
 
   <div class="grid">
     <button class="card c-kokushi" onclick="openApp('kokushi')">
@@ -227,14 +275,8 @@
     </button>
 
     <button class="card c-bensho" onclick="openApp('bensho')">
-      <div class="top"><span class="glyph">弁</span><h2>弁証支援</h2><div class="en">PATTERN ID</div></div>
-      <div class="desc">問診から弁証鑑別・治療穴・徒手検査を提示し、カルテを管理する臨床補助ツール。</div>
-      <div class="go">ひらく <span class="arr">→</span></div>
-    </button>
-
-    <button class="card c-search" onclick="openApp('search')">
-      <div class="top"><span class="glyph">穴</span><h2>選穴支援</h2><div class="en">POINT SEARCH</div></div>
-      <div class="desc">主治症（症状）から治療穴を検索。全361経穴×七出典の主治症データを横断。</div>
+      <div class="top"><span class="glyph">弁</span><h2>弁証・選穴支援</h2><div class="en">PATTERN ID & POINT SEARCH</div></div>
+      <div class="desc">経穴検索（主治症⇄経穴）と、問診→弁証鑑別→治療穴→徒手検査→カルテを一体化した臨床補助ツール。弁証の治療穴をタップで主治症も確認。</div>
       <div class="go">ひらく <span class="arr">→</span></div>
     </button>
 
@@ -246,12 +288,26 @@
   </div>
 
   <div class="home-foot">
-    <span class="ver" id="verLabel">バージョン: 読み込み中…</span>
+    <span class="ver" id="verLabel">バージョン: 確認中…</span>
+  </div>
+
+  <div class="backup-box" id="studentIdBox">
+    <div class="backup-title">個人ID設定（データ分析用）</div>
+    <div class="backup-note">学校名・学生番号を入力すると、国試学習・〇×問題集アプリの学習データ送信時に個人を識別するIDとして使われます（分析目的）。未入力でも各アプリは通常どおり使えます。学生番号は一度保存すると変更できなくなります（下部の「学習データをリセット」で再設定可能）。</div>
+    <div class="backup-btns" style="flex-wrap:wrap">
+      <input type="text" id="studentSchool" placeholder="学校名（例：大阪行岡医療専門学校長柄校）" style="flex:1;min-width:180px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;font-size:calc(13px*var(--fs));background:#fff">
+      <input type="text" id="studentNo" placeholder="学生番号" style="flex:1;min-width:120px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;font-size:calc(13px*var(--fs));background:#fff">
+    </div>
+    <div class="backup-note" id="studentNoLockNote" style="display:none;margin-top:6px;color:var(--cinnabar,#b4442e)">🔒 学生番号は設定済みのため変更できません。</div>
+    <div class="backup-btns" style="margin-top:8px">
+      <button class="btn-backup" id="studentIdSaveBtn" onclick="saveStudentInfo()">💾 保存</button>
+    </div>
+    <div class="backup-note" id="deviceIdLabel" style="margin:8px 0 0;color:#a99b7c">端末ID: —</div>
   </div>
 
   <div class="backup-box">
     <div class="backup-title">学習データのバックアップ</div>
-    <div class="backup-note">全アプリの学習履歴・編集内容（国試の進度・〇×の進度・弁証の編集やカルテ・筋トレ記録など）を、1つのファイルにまとめて保存・復元できます。機種変更や端末の移行にお使いください。</div>
+    <div class="backup-note">全アプリの学習履歴・編集内容（国試の進度・メモ・出題除外、〇×の進度、弁証の編集・問診表・カルテ、筋トレ記録、各アプリの文字サイズ設定）を1つのファイルにまとめて保存・復元できます。機種変更や端末の移行にお使いください。※取り込んだ問題・経穴データ自体は含まれません（移行先で各アプリから取り込み直してください）。</div>
     <div class="backup-btns">
       <button class="btn-backup" onclick="exportAllData()">📤 全データをバックアップ</button>
       <button class="btn-backup" onclick="document.getElementById('restore-file').click()">📥 バックアップから復元</button>
@@ -259,8 +315,16 @@
     </div>
   </div>
 
+  <div class="backup-box" id="resetBox">
+    <div class="backup-title">学習データのリセット</div>
+    <div class="backup-note">国試学習・〇×問題集アプリの学習履歴（進度・メモ・出題除外・本試験セッション・設定・未送信の送信待ちデータ）と、上の個人ID（学校名・学生番号）をすべて削除します。学生番号を入力し直したい場合はここからリセットしてください。<b>この操作は取り消せません。</b>必要ならリセット前に「全データをバックアップ」で保存してください。</div>
+    <div class="backup-btns">
+      <button class="btn-backup" onclick="resetStudyData()" style="color:#b4442e;border-color:#e0b3a8">🗑 学習データをリセット</button>
+    </div>
+  </div>
+
   <div class="credit">
-    <div class="credit-name">制作者：大阪行岡医療専門学校長柄校　鍼灸科　75期生　藤本</div>
+    <div class="credit-name">制作者：大阪行岡医療専門学校長柄校　鍼灸科　75期生</div>
     <div class="credit-mail">お問い合わせ：<span id="creditMail" class="selectable">kyokigyo★nekosan.uk　(★→@)</span></div>
   </div>
 </main>
@@ -278,15 +342,6 @@
 
 <div id="toast"></div>
 
-<section id="lock" aria-hidden="true" role="alertdialog" aria-modal="true">
-  <div class="seal">医</div>
-  <h2 id="lockTitle">インターネット接続が必要です</h2>
-  <p id="lockBody">このアプリはオンライン専用です。コンテンツを表示するにはインターネット接続が必要です。接続を確認して、再読み込みしてください。</p>
-  <div class="meta" id="lockMeta"></div>
-  <div class="status"><span class="dot"></span><span id="lockStatus">接続を待っています…</span></div>
-  <button class="retry" onclick="reloadNow()">🔄 再読み込み</button>
-</section>
-
 <script>
 /* ============================================================
    東洋医学 学習スイート — 統合ホーム
@@ -295,13 +350,116 @@
    ============================================================ */
 const APPS = {
   kokushi:{ title:'国試学習',  url:'apps/kokushi/index.html', bar:'#2c5f7c' },
-  search: { title:'選穴支援',  url:'apps/search/index.html',  bar:'#b5670a' },
-  bensho: { title:'弁証支援',  url:'apps/bensho/index.html',  bar:'#7a5c3e' },
+  search: { title:'弁証・選穴支援',  url:'apps/bensho/index.html',  bar:'#7a5c3e' },
+  bensho: { title:'弁証・選穴支援',  url:'apps/bensho/index.html',  bar:'#7a5c3e' },
   anki:   { title:'暗記アプリ',  url:'apps/anki/index.html',    bar:'#1f3a4d' },
   karuta: { title:'経穴カルタ用音声', url:'apps/karuta/index.html', bar:'#4a3a6a' },
   muscle: { title:'トレーニング検索',  url:'apps/muscle/index.html',  bar:'#3a3a1a' },
   marubatsu: { title:'国試〇×問題集', url:'apps/marubatsu/index.html', bar:'#1f5f6e' },
 };
+
+/* ===== 端末ID（UUID）=====
+   学生番号が未入力でも個人を区別できるよう、端末ごとに一意なIDを自動生成し
+   localStorage に保存する。国試学習・〇×問題集アプリからも同一オリジンで参照できる。 */
+const DEVICE_ID_KEY = 'suite_device_uuid';
+function getOrCreateDeviceId(){
+  try{
+    let id = localStorage.getItem(DEVICE_ID_KEY);
+    if(id) return id;
+    id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (function(){
+      // フォールバック（crypto.randomUUID非対応環境向け）
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c){
+        const r = Math.random()*16|0, v = c==='x' ? r : (r&0x3|0x8);
+        return v.toString(16);
+      });
+    })();
+    localStorage.setItem(DEVICE_ID_KEY, id);
+    return id;
+  }catch(e){ return 'unknown-device'; }
+}
+
+/* ===== 個人ID設定（学校名・学生番号）=====
+   国試学習・〇×問題集アプリ（同一オリジンのiframe内）が localStorage を共有して読み取り、
+   GASへの学習データ送信時に個人IDとして利用する。 */
+const STUDENT_INFO_KEY = 'suite_student_info';
+function loadStudentInfo(){
+  try{
+    return JSON.parse(localStorage.getItem(STUDENT_INFO_KEY)||'null') || {school:'', studentNo:''};
+  }catch(e){ return {school:'', studentNo:''}; }
+}
+function applyStudentNoLock(studentNo){
+  const ne = document.getElementById('studentNo');
+  const note = document.getElementById('studentNoLockNote');
+  const locked = !!(studentNo && studentNo.trim());
+  if(ne) ne.disabled = locked;
+  if(note) note.style.display = locked ? 'block' : 'none';
+}
+function saveStudentInfo(){
+  const school = (document.getElementById('studentSchool').value||'').trim();
+  const noEl = document.getElementById('studentNo');
+  const studentNo = (noEl.value||'').trim();
+  const prev = loadStudentInfo();
+  // 学生番号は一度保存されたら変更不可（リセットするまで既存値を維持）
+  const finalNo = (prev.studentNo && prev.studentNo.trim()) ? prev.studentNo : studentNo;
+  try{
+    localStorage.setItem(STUDENT_INFO_KEY, JSON.stringify({school, studentNo: finalNo}));
+    noEl.value = finalNo;
+    applyStudentNoLock(finalNo);
+    showToast('個人IDを保存しました');
+  }catch(e){ showToast('保存に失敗しました'); }
+}
+
+function idbClearStore(dbName, storeName){
+  return new Promise((resolve)=>{
+    const r = indexedDB.open(dbName);
+    r.onsuccess = ()=>{
+      const db = r.result;
+      if(!db.objectStoreNames.contains(storeName)){ db.close(); resolve(); return; }
+      const tx = db.transaction(storeName, 'readwrite');
+      tx.objectStore(storeName).clear();
+      tx.oncomplete = ()=>{ db.close(); resolve(); };
+      tx.onerror = ()=>{ db.close(); resolve(); };
+    };
+    r.onerror = ()=>resolve();
+  });
+}
+
+async function resetStudyData(){
+  const typed = prompt('国試学習・〇×問題集の学習データと個人ID（学生番号含む）をすべて削除します。\nこの操作は取り消せません。続行するには「リセット」と入力してください。');
+  if(typed !== 'リセット'){ showToast('キャンセルしました'); return; }
+
+  await Promise.all([
+    idbClearStore('StudyAppDB', 'progress'),
+    idbClearStore('StudyAppDB', 'memos'),
+    idbClearStore('StudyAppDB', 'mutedQuestions'),
+    idbClearStore('StudyAppDB', 'paperSessions'),
+    idbClearStore('StudyAppDB', 'settings'),   // 送信初回フラグ・出題設定も含めて初期化
+    idbClearStore('MarubatsuDB', 'progress'),
+    idbClearStore('MarubatsuDB', 'meta'),      // 送信初回フラグ・除外年度設定も含めて初期化
+  ]);
+
+  try{ localStorage.removeItem(STUDENT_INFO_KEY); }catch(e){}
+  try{ localStorage.removeItem('sync_queue_kokushi'); }catch(e){}
+  try{ localStorage.removeItem('sync_queue_marubatsu'); }catch(e){}
+
+  const se = document.getElementById('studentSchool');
+  const ne = document.getElementById('studentNo');
+  if(se) se.value = '';
+  if(ne) ne.value = '';
+  applyStudentNoLock('');
+
+  showToast('学習データをリセットしました。学生番号を再設定できます。');
+}
+(function initStudentInfoBox(){
+  const info = loadStudentInfo();
+  const se = document.getElementById('studentSchool');
+  const ne = document.getElementById('studentNo');
+  if(se) se.value = info.school;
+  if(ne) ne.value = info.studentNo;
+  applyStudentNoLock(info.studentNo);
+  const did = document.getElementById('deviceIdLabel');
+  if(did) did.textContent = '端末ID: ' + getOrCreateDeviceId();
+})();
 
 /* ===== 文字サイズ調整（A-/A+）：--fs を拡縮し localStorage に保存 ===== */
 const fsSteps=[0.85,1.0,1.15,1.3,1.45];
@@ -326,7 +484,6 @@ const appTitle= document.getElementById('appTitle');
 let currentApp = null;
 
 function openApp(key, fromPop){
-  if(typeof blocked !== 'undefined' && blocked){ return; } // 再読み込み画面表示中は開かない
   const app = APPS[key]; if(!app) return;
   currentApp = key;
   appTitle.textContent = app.title;
@@ -351,6 +508,7 @@ function closeApp(){
   viewer.setAttribute('aria-hidden','true');
   document.querySelector('meta[name=theme-color]').setAttribute('content', '#b03a2e');
   currentApp = null;
+  autoCheckVersion(); // ホーム復帰時にバージョン確認→必要なら自動更新
 }
 
 // ===== 履歴・端末の「戻る」ボタン対策 =====
@@ -383,33 +541,13 @@ function routeFromHash(){
   if(APPS[key]) openApp(key, true);
 }
 
-// ===== オンライン専用・バージョン管理 =====
-//  方針：コンテンツは永続キャッシュしない（オフライン保存させない）。
-//  起動時／24時間無操作／バックグラウンド復帰時に version.json を確認し、
-//  変化があれば強制リロード。取得できなければ再読み込み画面を表示。
-//  状態（最後の確認時刻・最後に見たバージョン）のみ sessionStorage に保持。
-const updBtn   = document.getElementById('updBtn');
+// ===== バージョン管理（オンライン専用・自動確認）=====
+//  方針：起動時・ホーム復帰時に version.json を確認し、変化があれば自動更新。
+//   オフライン時は何も起こらない（ロックしない）。更新ボタンは廃止。
 const verLabel = document.getElementById('verLabel');
-const lockEl   = document.getElementById('lock');
-const lockMeta = document.getElementById('lockMeta');
-const lockStatus = document.getElementById('lockStatus');
-const lockTitle  = document.getElementById('lockTitle');
-const lockBody   = document.getElementById('lockBody');
 let APP_VERSION = null;
 
-// 24時間無操作で再確認
-const IDLE_MS = 24 * 60 * 60 * 1000;
-// sessionStorage キー（タブを閉じると消える＝オフライン持ち出し不可）
-const SS_VER = 'suite_seen_version';
-const SS_OK  = 'suite_last_check';
-let blocked = false;
-let lastActivity = Date.now();
-
-function ssGet(k){ try{ return sessionStorage.getItem(k); }catch(e){ return null; } }
-function ssSet(k,v){ try{ sessionStorage.setItem(k,String(v)); }catch(e){} }
-function ssClearAll(){ try{ sessionStorage.removeItem(SS_VER); sessionStorage.removeItem(SS_OK); }catch(e){} }
-
-// version.json を必ずネットから取得（キャッシュ不可）。成功＝オンライン。
+// version.json を必ずネットから取得（キャッシュ不可）。
 async function fetchVersion(){
   try{
     const res = await fetch('./version.json?ts='+Date.now(), {cache:'no-store'});
@@ -419,121 +557,48 @@ async function fetchVersion(){
   }catch(e){ return null; }
 }
 
-// 再読み込み画面（オフライン／取得失敗時）。真っ白防止。
-function showBlock(kind){
-  blocked = true;
-  if(currentApp) closeApp();
-  if(kind==='offline'){
-    lockTitle.textContent = 'インターネット接続が必要です';
-    lockBody.textContent  = 'このアプリはオンライン専用です。コンテンツを表示するにはインターネット接続が必要です。接続を確認して、再読み込みしてください。';
-  }else{
-    lockTitle.textContent = '読み込みに失敗しました';
-    lockBody.textContent  = '最新の状態を取得できませんでした。通信状況を確認して、再読み込みしてください。';
-  }
-  lockStatus.textContent = '接続を待っています…';
-  lockMeta.textContent = '';
-  lockEl.classList.add('show');
-  lockEl.setAttribute('aria-hidden','false');
-  document.body.style.overflow = 'hidden';
-}
-function hideBlock(){
-  blocked = false;
-  lockEl.classList.remove('show');
-  lockEl.setAttribute('aria-hidden','true');
-  document.body.style.overflow = '';
-}
+// 完全リロード（更新適用後に呼ぶ）。
 function reloadNow(){
-  // キャッシュバスター付きで完全リロード。
-  // URL のハッシュ（例 #kokushi）は保持されるため、リロード後は
-  // routeFromHash() が同じアプリを自動で開き直す（アプリ単位で復帰）。
-  // ※アプリ内のどの画面・入力途中の状態までは復元されない（各アプリのトップから再開）。
   const u = new URL(location.href);
   u.searchParams.set('_r', Date.now());
   location.replace(u.toString());
 }
 
-// 起動時の検証：必ずオンラインで最新を確認してから表示する
-async function verifyOnStart(){
-  const latest = await fetchVersion();
-  if(!latest){
-    // オフライン／取得失敗 → sessionStorage を消して再読み込み画面
-    ssClearAll();
-    showBlock('offline');
-    return;
-  }
-  const seen = ssGet(SS_VER);
-  APP_VERSION = latest;
-  verLabel.textContent = 'バージョン: ' + latest;
-  ssSet(SS_OK, Date.now());
-  if(seen && seen !== latest){
-    // 既に何か見ていて、バージョンが変わった → 強制的に最新へ
-    ssSet(SS_VER, latest);
-    showToast('新しいバージョン（'+latest+'）に更新します…');
-    if(navigator.serviceWorker && navigator.serviceWorker.controller){
-      navigator.serviceWorker.controller.postMessage({type:'UPDATE_NOW'});
-    }else{
-      setTimeout(reloadNow, 600);
+// バージョン確認→必要なら自動更新（サイレント実行。アプリ起動中でも動作）
+// 更新後はリロード前の画面（開いていたアプリ）を可能な限り復元する。
+let _checking = false; // 二重確認防止
+async function autoCheckVersion(){
+  if(_checking) return;
+  _checking = true;
+  try{
+    const latest = await fetchVersion();
+    if(!latest){ _checking=false; return; } // オフライン時は何もしない
+    verLabel.textContent = 'バージョン: ' + latest;
+    if(APP_VERSION && latest !== APP_VERSION){
+      // 更新あり：開いているアプリをsessionStorageに保存してからリロード
+      showToastHome('新しいバージョン（'+latest+'）に更新します…');
+      if(currentApp) sessionStorage.setItem('restoreApp', currentApp);
+      sessionStorage.setItem('forceSwReload','1');
+      if(navigator.serviceWorker && navigator.serviceWorker.controller){
+        navigator.serviceWorker.controller.postMessage({type:'UPDATE_NOW'});
+      }else{
+        setTimeout(reloadNow, 800);
+      }
+      return; // リロード後はここには戻らない
     }
-    return;
-  }
-  ssSet(SS_VER, latest);
-  hideBlock();
-}
-
-// 無操作／復帰時の再確認：変化があれば強制更新、取れなければ再読み込み画面
-async function recheck(){
-  const latest = await fetchVersion();
-  if(!latest){ ssClearAll(); showBlock('offline'); return; }
-  ssSet(SS_OK, Date.now());
-  if(APP_VERSION && latest !== APP_VERSION){
-    showToast('新しいバージョン（'+latest+'）に更新します…');
-    ssSet(SS_VER, latest);
-    if(navigator.serviceWorker && navigator.serviceWorker.controller){
-      navigator.serviceWorker.controller.postMessage({type:'UPDATE_NOW'});
-    }else{
-      setTimeout(reloadNow, 600);
-    }
-  }else{
-    if(blocked) hideBlock();
+    APP_VERSION = latest;
+  }finally{
+    _checking = false;
   }
 }
 
-// 手動「更新確認」（更新ボタンは廃止。自動確認に一本化。互換のため関数は残す）
-async function checkUpdate(){
-  if(!updBtn){ // ボタンが無い場合は確認のみ実行
-    const latest=await fetchVersion();
-    if(!latest){ ssClearAll(); showBlock('offline'); return; }
-    ssSet(SS_OK,Date.now());
-    if(APP_VERSION && latest!==APP_VERSION){ ssSet(SS_VER,latest);
-      if(navigator.serviceWorker&&navigator.serviceWorker.controller){navigator.serviceWorker.controller.postMessage({type:'UPDATE_NOW'});}
-      else{ setTimeout(reloadNow,600); } }
-    return;
-  }
-  updBtn.classList.add('checking');
-  updBtn.textContent = '確認中…';
-  const latest = await fetchVersion();
-  if(!latest){
-    updBtn.classList.remove('checking');
-    updBtn.textContent = '🔄 オフライン';
-    showToast('オフラインのため確認できませんでした。');
-    setTimeout(()=>{ updBtn.textContent='🔄 更新確認'; }, 2200);
-    ssClearAll(); showBlock('offline');
-    return;
-  }
-  if(APP_VERSION && latest !== APP_VERSION){
-    updBtn.textContent = '更新中…';
-    showToast('新しいバージョン（'+latest+'）に更新します…');
-    ssSet(SS_VER, latest);
-    if(navigator.serviceWorker && navigator.serviceWorker.controller){
-      navigator.serviceWorker.controller.postMessage({type:'UPDATE_NOW'});
-    }else{ setTimeout(reloadNow, 600); }
-  }else{
-    updBtn.classList.remove('checking');
-    updBtn.textContent = '🔄 最新です';
-    showToast('最新の状態です（'+latest+'）');
-    setTimeout(()=>{ updBtn.textContent='🔄 更新確認'; }, 2200);
-  }
-}
+// バックグラウンド→フォアグラウンド復帰時・定期確認（アプリ起動中でも動作）
+document.addEventListener('visibilitychange', ()=>{
+  if(!document.hidden) autoCheckVersion();
+});
+
+// アプリ起動中の定期確認（10分ごと）
+setInterval(()=>{ if(!document.hidden) autoCheckVersion(); }, 30 * 60 * 1000);
 
 let toastT;
 function showToast(msg){
@@ -542,42 +607,55 @@ function showToast(msg){
   clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'), 3200);
 }
 
-// ===== Service Worker 登録 =====
+// ===== Service Worker 登録・更新制御 =====
 if('serviceWorker' in navigator){
+  // 制御SWが切り替わったとき、自動更新フロー時のみリロード
+  let _swReloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+    if(_swReloaded) return;
+    if(sessionStorage.getItem('forceSwReload')==='1'){
+      _swReloaded = true;
+      sessionStorage.removeItem('forceSwReload');
+      reloadNow();
+    }
+  });
   window.addEventListener('load', ()=>{
     navigator.serviceWorker.register('./sw.js').catch(()=>{});
+    // SWからの更新完了通知でリロード
     navigator.serviceWorker.addEventListener('message', e=>{
-      if(e.data && e.data.type==='UPDATED'){ reloadNow(); }
+      if(e.data && e.data.type==='UPDATED'){
+        // forceSwReload・restoreAppはautoCheckVersionで設定済み
+        reloadNow();
+      }
     });
   });
 }
 
-// 無操作タイマー：24時間無操作の後の操作・復帰で再確認
-['click','keydown','touchstart','scroll','mousemove'].forEach(ev=>{
-  window.addEventListener(ev, ()=>{
-    const now=Date.now();
-    if(now - lastActivity >= IDLE_MS){ lastActivity=now; recheck(); }
-    else lastActivity=now;
-  }, {passive:true});
-});
-
-// オンライン復帰・バックグラウンド→フォアグラウンド復帰で強制確認
-window.addEventListener('online', ()=>recheck());
-document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) recheck(); });
-
 // ===== 全アプリ一括バックアップ =====
 // 各アプリは同一オリジン配下のため、ホームから localStorage と IndexedDB に直接アクセスできる。
-const BACKUP_LS_KEYS = ['tcm_edits_v1','tcm_qform_v1','tcm_charts_v1','muscle_nav_logs'];
+const BACKUP_LS_KEYS = [
+  'tcm_edits_v1','tcm_qform_v1','tcm_charts_v1', // 弁証：編集・問診表・カルテ
+  'muscle_nav_logs',                             // 筋トレ：記録
+  // 各アプリの文字サイズ設定
+  'kokushi-fs-idx','marubatsu-fs-idx','search-fs-idx','anki-fs-idx','bensho-fs-idx','karuta-fs-idx','muscle-fs-idx'
+];
 const BACKUP_IDB = [
-  { db:'StudyAppDB',   stores:['progress','settings','paperSessions'] }, // 国試学習
-  { db:'MarubatsuDB',  stores:['progress'] },                            // 〇×問題集
+  // 国試学習：進度・設定・本試験セッション・メモ・出題除外（ミュート）
+  { db:'StudyAppDB',   stores:['progress','settings','paperSessions','memos','mutedQuestions'] },
+  { db:'MarubatsuDB',  stores:['progress'] },                            // 〇×問題集：進度
 ];
 function idbOpen(name){
   return new Promise((resolve,reject)=>{ const r=indexedDB.open(name); r.onsuccess=()=>resolve(r.result); r.onerror=()=>reject(r.error); });
 }
 // 指定ストアが全て存在する状態でDBを開く（無ければバージョンを上げて作成）。keyPathはアプリと合わせる。
-const STORE_KEYPATH = { progress:'questionId', settings:'key', paperSessions:'id', questions:'id', meta:'key' };
-const DB_TARGET_VERSION = { StudyAppDB:3, MarubatsuDB:2 }; // 各アプリが使うバージョンに合わせる
+const STORE_KEYPATH = { progress:'questionId', settings:'key', paperSessions:'id', memos:'questionId', mutedQuestions:'questionId', questions:'id', meta:'key', questionData:'key' };
+const DB_TARGET_VERSION = { StudyAppDB:5, MarubatsuDB:4 }; // 各アプリが使う現行バージョンに合わせる
+// 各DBが本来持つ「全ストア」。復元でDBを新規作成する場合はアプリと同じ完全な構成で作る
+// （バックアップ対象だけ作るとアプリ起動時にストア不足で不整合になるため）。
+const DB_FULL_STORES = {
+  StudyAppDB:  ['progress','settings','paperSessions','memos','mutedQuestions','questionData'],
+  MarubatsuDB: ['meta','progress','questionData'],
+};
 function idbOpenEnsure(name, stores){
   return new Promise((resolve,reject)=>{
     const r=indexedDB.open(name);
@@ -585,11 +663,15 @@ function idbOpenEnsure(name, stores){
       const db=r.result;
       const missing=stores.filter(s=>!db.objectStoreNames.contains(s));
       if(missing.length===0){ resolve(db); return; }
-      // 不足ストアがある＝アプリ未起動などでDBが不完全。アプリと同じバージョンで開き直して作成。
+      // 不足ストアがある＝アプリ未起動などでDBが不完全。アプリと同じバージョン・全ストア構成で作り直す。
       const target=Math.max(db.version, DB_TARGET_VERSION[name]||(db.version+1));
       db.close();
       const r2=indexedDB.open(name, target);
-      r2.onupgradeneeded=(e)=>{ const d=e.target.result; stores.forEach(s=>{ if(!d.objectStoreNames.contains(s)) d.createObjectStore(s,{keyPath:STORE_KEYPATH[s]||'id'}); }); };
+      r2.onupgradeneeded=(e)=>{
+        const d=e.target.result;
+        const full=DB_FULL_STORES[name]||stores;
+        full.forEach(s=>{ if(!d.objectStoreNames.contains(s)) d.createObjectStore(s,{keyPath:STORE_KEYPATH[s]||'id'}); });
+      };
       r2.onsuccess=()=>resolve(r2.result); r2.onerror=()=>reject(r2.error);
     };
     r.onerror=()=>reject(r.error);
@@ -683,44 +765,24 @@ function showToastHome(msg){
 (function boot(){
   // ホームの土台となる履歴状態を1つ用意（戻るを吸収する受け皿）。
   try{ history.replaceState({ home:true }, '', location.href); }catch(e){}
+
+  // 更新リロード後の画面復元：sessionStorageに保存されていたアプリを開き直す
+  const restoreKey = sessionStorage.getItem('restoreApp');
+  if(restoreKey && APPS[restoreKey]){
+    sessionStorage.removeItem('restoreApp');
+    try{ history.pushState({ app:restoreKey }, '', '#'+restoreKey); }catch(e){}
+    openApp(restoreKey, true);
+  }
   // リロード復帰：URLにハッシュ（#kokushi 等）があれば、そのアプリを開き直す。
-  if(location.hash){
+  else if(location.hash){
     const key = location.hash.replace('#','');
     if(APPS[key]){
-      // 復帰時もアプリ状態を履歴に積む（戻る＝ホーム）。
       try{ history.pushState({ app:key }, '', '#'+key); }catch(e){}
       openApp(key, true);
     }
   }
-  verifyOnStart();
-})();
 
-// ===== コピー無効化（コンテンツ保護・他アプリと同じ）=====
-//  テキスト選択・右クリック・長押し・コピーを抑止。
-//  ただし入力欄と、連絡先メール（.selectable）は選択・コピー可能のままにする。
-(function(){
-  try{
-    var cpCss = document.createElement('style');
-    cpCss.textContent =
-      'html{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;' +
-      '-webkit-touch-callout:none;}' +
-      'input,textarea,[contenteditable="true"],[contenteditable=""],.selectable,.selectable *{' +
-      '-webkit-user-select:text !important;-moz-user-select:text !important;' +
-      '-ms-user-select:text !important;user-select:text !important;-webkit-touch-callout:default !important;}';
-    (document.head||document.documentElement).appendChild(cpCss);
-    var allowed = function(t){
-      if(!t) return false;
-      var tag=(t.tagName||'').toLowerCase();
-      if(tag==='input'||tag==='textarea') return true;
-      if(t.isContentEditable) return true;
-      if(t.closest && t.closest('.selectable')) return true; // 連絡先メールは許可
-      return false;
-    };
-    document.addEventListener('contextmenu', function(e){ if(!allowed(e.target)) e.preventDefault(); }, {capture:true});
-    document.addEventListener('copy', function(e){ if(!allowed(e.target)) e.preventDefault(); }, {capture:true});
-    document.addEventListener('cut', function(e){ if(!allowed(e.target)) e.preventDefault(); }, {capture:true});
-    document.addEventListener('dragstart', function(e){ if(!allowed(e.target)) e.preventDefault(); }, {capture:true});
-  }catch(e){}
+  autoCheckVersion(); // 起動時にバージョン確認→必要なら自動更新
 })();
 </script>
 </body>

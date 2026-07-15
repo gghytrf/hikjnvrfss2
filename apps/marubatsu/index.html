@@ -53,28 +53,26 @@
     if(document.head){ injectCss(); }
     else { document.addEventListener('DOMContentLoaded', injectCss); }
   }catch(e){}
-
-    // ===== コピー無効化（コンテンツ保護）=====
-    // テキスト選択・右クリック・長押しを抑止。ただし入力欄は除外（カルテ/検索/メモは操作可）。
-    var cpCss = document.createElement('style');
-    cpCss.textContent =
-      'html{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;' +
-      '-webkit-touch-callout:none;}' +
-      'input,textarea,[contenteditable="true"],[contenteditable=""]{' +
-      '-webkit-user-select:text !important;-moz-user-select:text !important;' +
-      '-ms-user-select:text !important;user-select:text !important;-webkit-touch-callout:default !important;}';
-    (document.head||document.documentElement).appendChild(cpCss);
-    var isEditable = function(t){
-      if(!t) return false;
-      var tag=(t.tagName||'').toLowerCase();
-      if(tag==='input'||tag==='textarea') return true;
-      if(t.isContentEditable) return true;
-      return false;
-    };
-    document.addEventListener('contextmenu', function(e){ if(!isEditable(e.target)) e.preventDefault(); }, {capture:true});
-    document.addEventListener('copy', function(e){ if(!isEditable(e.target)) e.preventDefault(); }, {capture:true});
-    document.addEventListener('cut', function(e){ if(!isEditable(e.target)) e.preventDefault(); }, {capture:true});
-    document.addEventListener('dragstart', function(e){ if(!isEditable(e.target)) e.preventDefault(); }, {capture:true});
+  // ===== コピー無効化（コンテンツ保護）=====
+  var cpCss = document.createElement('style');
+  cpCss.textContent =
+    'html{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;' +
+    '-webkit-touch-callout:none;}' +
+    'input,textarea,[contenteditable="true"],[contenteditable=""]{' +
+    '-webkit-user-select:text !important;-moz-user-select:text !important;' +
+    '-ms-user-select:text !important;user-select:text !important;-webkit-touch-callout:default !important;}';
+  (document.head||document.documentElement).appendChild(cpCss);
+  var isEditable = function(t){
+    if(!t) return false;
+    var tag=(t.tagName||'').toLowerCase();
+    if(tag==='input'||tag==='textarea') return true;
+    if(t.isContentEditable) return true;
+    return false;
+  };
+  document.addEventListener('contextmenu', function(e){ if(!isEditable(e.target)) e.preventDefault(); }, {capture:true});
+  document.addEventListener('copy',      function(e){ if(!isEditable(e.target)) e.preventDefault(); }, {capture:true});
+  document.addEventListener('cut',       function(e){ if(!isEditable(e.target)) e.preventDefault(); }, {capture:true});
+  document.addEventListener('dragstart', function(e){ if(!isEditable(e.target)) e.preventDefault(); }, {capture:true});
 
   })();
 </script>
@@ -174,6 +172,13 @@
   .btn:disabled{ background:#aab5bf; cursor:not-allowed; }
   .btn.secondary{ background:#6c8499; }
   .btn.outline{ background:#fff; color:var(--main); border:2px solid var(--main); }
+  .btn.danger{ background:#c0504d; }
+  /* 国試学習アプリと揃えた設定行 */
+  .setting-row{ display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--line); }
+  .setting-row:last-child{ border-bottom:none; }
+  .setting-row .lbl{ font-size:calc(14px*var(--fs)); color:var(--ink); }
+  .setting-row .desc{ font-size:calc(11px*var(--fs)); color:var(--sub); margin-top:2px; }
+  .setting-row .btn{ flex:0 0 auto; padding:8px 14px; font-size:calc(13px*var(--fs)); }
 
   .progress-info{ background:#eef4f8; padding:10px 14px; border-radius:10px; margin-bottom:14px; font-size:calc(13px*var(--fs)); color:var(--main); text-align:center; font-weight:500; }
   .bar{ height:6px; background:var(--line); border-radius:3px; overflow:hidden; margin-top:8px; }
@@ -346,17 +351,33 @@
   <!-- ===== 設定 ===== -->
   <div id="settings" class="screen">
     <div class="card">
-      <h2>学習履歴の管理</h2>
-      <div style="font-size:calc(13px*var(--fs));color:var(--sub);margin-bottom:12px;">学習履歴（忘却曲線・解答記録）は、この端末内に保存されています。バックアップ（書き出し・復元）は、統合ホーム画面下部の「学習データのバックアップ」からまとめて行えます。</div>
-      <button class="menu-btn" onclick="resetProgress()"><span class="ico">🗑️</span><span class="label">学習履歴をリセット</span>
-        <div class="desc">解答記録・忘却曲線をすべて消去（元に戻せません）</div></button>
+      <h2>問題データ</h2>
+      <div id="mb-data-info" style="font-size:calc(13px*var(--fs));color:var(--sub);margin-bottom:10px;">問題データ: —</div>
+      <div class="setting-row">
+        <div>
+          <div class="lbl">問題データについて</div>
+          <div class="desc">起動時に自動で marubatsu_questions.json を読み込みます（オンライン接続必須）</div>
+        </div>
+
+      </div>
     </div>
     <div class="card">
-      <h2>ℹ️ アプリ情報</h2>
-      <div style="padding:6px 2px;font-size:calc(13px*var(--fs));line-height:2;color:var(--sub);">
-        <div>あん摩マッサージ指圧師・はり師きゅう師 国家試験 〇×問題集</div>
-        <div>バージョン情報・更新は統合ホーム画面で管理されます。</div>
+      <h2>出題しない年度</h2>
+      <div style="font-size:calc(13px*var(--fs));color:var(--sub);margin-bottom:10px;">チェックした年度の問題は今日の演習・科目別演習・復習モードのすべてで表示されません。</div>
+      <div id="mb-settings-year-list" style="max-height:360px;overflow-y:auto;">
+        <div style="color:var(--sub);text-align:center;padding:16px;">読み込み中...</div>
       </div>
+    </div>
+    <div class="card">
+      <h2>学習履歴の管理</h2>
+      <div class="setting-row">
+        <div>
+          <div class="lbl">学習履歴をリセット</div>
+          <div class="desc">問題データは保持されます</div>
+        </div>
+        <button class="btn danger" onclick="resetProgress()">🗑️ 削除</button>
+      </div>
+      <div style="font-size:calc(12px*var(--fs));color:var(--sub);margin-top:10px;line-height:1.7;">バックアップ（書き出し・復元）は、統合ホーム画面下部の「学習データのバックアップ」からまとめて行えます。</div>
     </div>
   </div>
 
@@ -391,8 +412,10 @@
 
 /* ====== 状態 ====== */
 let ALL = [];               // 全問題
+let MB_DATA_VERSION = null;  // 取り込んだ問題データのバージョン
 let YEAR_LABELS = {};       // year値 → 表示ラベル
 let PROGRESS = {};          // questionId -> {questionId,correctCount,incorrectCount,intervalLevel,lastResult,lastAnsweredAt,nextReviewAt}
+let MB_EXCLUDE_YEARS = [];  // 除外年度キー配列 (例: ["hari_kyu_30","amashi_30"])
 let dailyCount = 20;        // 今日の演習の問題数
 
 let session = null;         // {queue, idx, correct, wrong, answered, mode, subject}
@@ -449,20 +472,22 @@ async function saveProgress(qid, isCorrect){
 }
 
 /* ====== データ読み込み ======
-   ・問題データはデバイスに保存しない（オンライン専用）。
-   ・起動・フォアグラウンド復帰のたびにネットから取得する。 */
+   ・問題データは起動時に marubatsu_questions.json を fetch する（端末に保存しない）。
+   ・学習履歴（progress）は引き続き IndexedDB に保存する。 */
 const MB_DB = 'MarubatsuDB';
 let _mbdb = null;
 
 function mbOpenDB(){
   return new Promise((resolve, reject)=>{
-    const req = indexedDB.open(MB_DB, 3); // v3: questions ストア廃止
+    const req = indexedDB.open(MB_DB, 4); // v4: questionData ストア追加（取り込んだ問題を端末保存）
     req.onupgradeneeded = (e)=>{
       const db = e.target.result;
-      // 旧バージョンの questions ストアを削除（問題データはデバイスに保存しない）
+      // 旧バージョンの questions ストアは使わない
       if(db.objectStoreNames.contains('questions')) db.deleteObjectStore('questions');
       if(!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath:'key' });
       if(!db.objectStoreNames.contains('progress')) db.createObjectStore('progress', { keyPath:'questionId' });
+      // questionData は廃止（毎回fetchするためIndexedDB保存不要）
+      if(db.objectStoreNames.contains('questionData')) db.deleteObjectStore('questionData');
     };
     req.onsuccess = ()=>resolve(req.result);
     req.onerror = ()=>reject(req.error);
@@ -474,43 +499,196 @@ function mbGetAll(store){
     r.onsuccess=()=>resolve(r.result||[]); r.onerror=()=>reject(r.error);
   });
 }
+function mbGet(store, key){
+  return new Promise((resolve)=>{
+    if(!_mbdb.objectStoreNames.contains(store)){ resolve(null); return; }
+    const tx=_mbdb.transaction(store,'readonly'); const r=tx.objectStore(store).get(key);
+    r.onsuccess=()=>resolve(r.result||null); r.onerror=()=>resolve(null);
+  });
+}
+function mbPut(store, value){
+  return new Promise((resolve,reject)=>{
+    const tx=_mbdb.transaction(store,'readwrite'); const r=tx.objectStore(store).put(value);
+    r.onsuccess=()=>resolve(); r.onerror=()=>reject(r.error);
+  });
+}
 
-// ネットから問題データを取得（デバイスには保存しない）
-async function mbFetchQuestions(){
+// 起動時に同フォルダの marubatsu_questions.json を fetch で読み込む（端末には保存しない）
+async function mbLoadQuestions(){
   try{
-    const res = await fetch('./marubatsu_questions.json?_=' + Date.now(), { cache:'no-store' });
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const data = await res.json();
-    ALL = data.questions || [];
+    const res = await fetch('./marubatsu_questions.json?_=' + Date.now(), {cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    const arr = json && json.questions;
+    if(!Array.isArray(arr) || arr.length === 0) throw new Error('データが空です');
+    ALL = arr;
+    MB_DATA_VERSION = (json && json.questionDataVersion) || (json && json.version) || null;
     return true;
-  }catch(e){ console.warn('問題データ取得スキップ（オフライン等）:', e.message); return false; }
+  }catch(e){
+    console.error('marubatsu_questions.json の読み込みに失敗:', e.message);
+    return false;
+  }
+}
+
+// mbShowImportPrompt / mbHideImportPrompt / mbReimport は廃止（fetch方式に移行）
+
+//=========================================================
+// 学習データ自動送信（GAS Webアプリへ）
+//=========================================================
+// ↓ GASのウェブアプリをデプロイして発行されたURLに置き換えてください
+//   (kokushiアプリと同じURLでOK。appフィールドで区別されます)
+const SYNC_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxl9qJANV_iy-AMwqEQmrXzkvHax75kmvGQ3Wmxxlnrb7KuBKAPYOS8G9r7rZmVvfyr/exec';
+const SYNC_APP_ID = 'marubatsu';
+const SYNC_INITIAL_META_KEY = 'syncInitialDone';
+
+// 端末ID（UUID）：ホーム画面(index.html)側と同じキーを使い、未生成なら自分で生成する
+const DEVICE_ID_KEY = 'suite_device_uuid';
+function getOrCreateDeviceId() {
+  try {
+    let id = localStorage.getItem(DEVICE_ID_KEY);
+    if (id) return id;
+    id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (function(){
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c){
+        const r = Math.random()*16|0, v = c==='x' ? r : (r&0x3|0x8);
+        return v.toString(16);
+      });
+    })();
+    localStorage.setItem(DEVICE_ID_KEY, id);
+    return id;
+  } catch (e) { return 'unknown-device'; }
+}
+
+function getStudentInfo() {
+  let school = '', studentNo = '';
+  try {
+    const raw = localStorage.getItem('suite_student_info');
+    if (raw) {
+      const o = JSON.parse(raw);
+      school = o.school || ''; studentNo = o.studentNo || '';
+    }
+  } catch (e) {}
+  return { school, studentNo, deviceId: getOrCreateDeviceId() };
+}
+
+async function isInitialSyncDone() {
+  try {
+    const rec = await mbGet('meta', SYNC_INITIAL_META_KEY);
+    return !!(rec && rec.value);
+  } catch (e) { return false; }
+}
+async function markInitialSyncDone() {
+  try { await mbPut('meta', { key: SYNC_INITIAL_META_KEY, value: true }); } catch (e) {}
+}
+
+//=========================================================
+// 送信キュー（オフライン・送信失敗時に備えた再送のしくみ）
+//=========================================================
+const SYNC_QUEUE_KEY = 'sync_queue_marubatsu';
+
+function loadSyncQueue() {
+  try { return JSON.parse(localStorage.getItem(SYNC_QUEUE_KEY) || '[]'); } catch (e) { return []; }
+}
+function saveSyncQueue(q) {
+  try { localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(q)); } catch (e) {}
+}
+
+function enqueueSync(payload) {
+  if (!SYNC_ENDPOINT || SYNC_ENDPOINT.indexOf('★') !== -1) return; // 未設定時は何もしない
+  const student = getStudentInfo();
+  const record = Object.assign({
+    app: SYNC_APP_ID,
+    school: student.school,
+    studentNo: student.studentNo,
+    deviceId: student.deviceId,
+    sentAt: new Date().toISOString()
+  }, payload);
+  const q = loadSyncQueue();
+  q.push(record);
+  saveSyncQueue(q);
+  flushSyncQueue();
+}
+
+let _flushingSyncQueue = false;
+// mode:'no-cors'のためサーバ側の成否は判定できないが、fetch自体がエラーを投げなければ
+// 「ネットワークへは送出できた」とみなして次に進む。オフライン等でfetchが失敗したら
+// そこで中断し、残りは次回（アプリ起動時・オンライン復帰時・次の解答時）に持ち越す。
+async function flushSyncQueue() {
+  if (_flushingSyncQueue) return;
+  if (!SYNC_ENDPOINT || SYNC_ENDPOINT.indexOf('★') !== -1) return;
+  if (!navigator.onLine) return;
+  _flushingSyncQueue = true;
+  try {
+    let q = loadSyncQueue();
+    while (q.length > 0) {
+      const rec = q[0];
+      try {
+        await fetch(SYNC_ENDPOINT, {
+          method: 'POST', mode: 'no-cors', keepalive: true,
+          headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(rec)
+        });
+        if (rec.type === 'full') await markInitialSyncDone();
+        q.shift();
+        saveSyncQueue(q);
+      } catch (e) {
+        break;
+      }
+    }
+  } finally {
+    _flushingSyncQueue = false;
+  }
+}
+window.addEventListener('online', flushSyncQueue);
+
+// 初回のみ：これまでの全進捗データをまとめて送信
+async function syncFullData() {
+  const progressList = await pgGetAll();
+  enqueueSync({ type: 'full', progress: progressList });
+  // ※初回完了フラグは実際に送信できた時点(flushSyncQueue内)で立てる（オフライン時の事故防止）
+}
+
+// 1問解いた直後に呼ぶ（初回は全データ送信に切り替わり、以降は差分のみ）
+async function syncOneAnswer(qid) {
+  try {
+    const done = await isInitialSyncDone();
+    if (!done) { await syncFullData(); return; }
+    enqueueSync({ type: 'answer', progress: PROGRESS[qid] || null });
+  } catch (e) { console.error('sync(answer)エラー:', e); }
 }
 
 async function loadData(){
+  // 読み込み中オーバーレイ表示
+  (function(){
+    if(!document.getElementById('_sp-style')){
+      var st=document.createElement('style'); st.id='_sp-style';
+      st.textContent='@keyframes _sp-spin{to{transform:rotate(360deg)}}';
+      document.head.appendChild(st);
+    }
+    document.body.insertAdjacentHTML('beforeend', '<div style="position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f5f7fa;font-family:sans-serif;color:#7a8a99;" id="_load-overlay"><div style="width:36px;height:36px;border:3px solid #ddd;border-top-color:#2c5f7c;border-radius:50%;animation:_sp-spin 0.7s linear infinite;margin-bottom:16px;"></div>読み込み中…</div>');
+  })();
   _mbdb = await mbOpenDB();
   await loadProgressAll();
-  const ok = await mbFetchQuestions();
+  // 除外年度を読み込む
+  try{
+    const rec = await mbGet('meta', 'excludeYears');
+    MB_EXCLUDE_YEARS = (rec && Array.isArray(rec.value)) ? rec.value : [];
+  }catch(e){ MB_EXCLUDE_YEARS = []; }
+  const ok = await mbLoadQuestions();
   if(!ok || ALL.length === 0){
-    document.querySelector('#home .card').innerHTML =
-      '<div class="empty-state"><div class="big">📶</div>インターネット接続が必要です。<br>接続してから開き直してください。</div>';
+    document.body.innerHTML = '<div style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px 24px;background:#f5f7fa;font-family:sans-serif;color:#2c3e50;">' +
+      '<div style="font-size:48px;margin-bottom:16px;">⚠️</div>' +
+      '<h2 style="margin-bottom:12px;">問題データを読み込めませんでした</h2>' +
+      '<p style="color:#7a8a99;">marubatsu_questions.json が同フォルダに存在するか確認し、再度開いてください。</p></div>';
     return;
   }
+  // 読み込み完了：オーバーレイ除去
+  var _ov = document.getElementById('_load-overlay');
+  if(_ov) _ov.remove();
   buildFilters();
   refreshHome();
+  flushSyncQueue(); // 前回送りきれなかった学習データがあれば再送を試みる
 }
 
-// フォアグラウンド復帰時：毎回問題データを再取得
-document.addEventListener('visibilitychange', async ()=>{
-  if(document.hidden || !_mbdb) return;
-  try{
-    const ok = await mbFetchQuestions();
-    if(ok){ buildFilters(); refreshHome(); }
-    else{
-      document.querySelector('#home .card').innerHTML =
-        '<div class="empty-state"><div class="big">📶</div>ネット接続が必要です。<br>接続してから開き直してください。</div>';
-    }
-  }catch(e){}
-});
+// 自動のオンライン確認は行わない（データは取り込み済み・オフラインで動作）。
 
 function buildFilters(){
   // 年度ラベル
@@ -544,7 +722,12 @@ function showScreen(id){
   window.scrollTo(0,0);
 }
 function openStats(){ refreshStats(); showScreen('stats'); }
-function openSettings(){ showScreen('settings'); }
+function openSettings(){
+  showScreen('settings');
+  const el = document.getElementById('mb-data-info');
+  if(el) el.textContent = '問題データ: ' + (ALL && ALL.length ? ('ver.' + (MB_DATA_VERSION || '—') + '（' + ALL.length + '問）') : '読み込み中…');
+  mbRenderYearList();
+}
 function goSubjectSelect(){ showScreen('subjects'); }
 
 /* ====== 今日の演習セットアップ ====== */
@@ -565,8 +748,9 @@ function shuffle(a){ a=a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.fl
 // 今日の演習：未出題・復習対象を優先し、全科目から分散して出題
 function startDailyMode(){
   const today = todayStr();
+  const pool = mbFilteredAll();
   const unseen = [], due = [], rest = [];
-  ALL.forEach(q=>{
+  pool.forEach(q=>{
     const p = PROGRESS[q.id];
     if(!p || !p.lastAnsweredAt) unseen.push(q);
     else if(p.nextReviewAt && p.nextReviewAt <= today) due.push(q);
@@ -583,12 +767,12 @@ function startDailyMode(){
 function startMode(mode){
   if(mode!=='review') return;
   const today = todayStr();
-  let dueList = ALL.filter(q=>{ const p=PROGRESS[q.id]; return p && p.nextReviewAt && p.nextReviewAt <= today; });
+  const pool = mbFilteredAll();
+  let dueList = pool.filter(q=>{ const p=PROGRESS[q.id]; return p && p.nextReviewAt && p.nextReviewAt <= today; });
   if(dueList.length===0){
-    // 復習対象が無ければ、間違えたことのある問題を出題
-    dueList = ALL.filter(q=>{ const p=PROGRESS[q.id]; return p && p.incorrectCount>0; });
+    toast('今は復習対象の問題がありません');
+    return;
   }
-  if(dueList.length===0){ toast('今は復習対象の問題がありません'); return; }
   // nextReviewAt の早い順
   dueList.sort((a,b)=>{
     const da=(PROGRESS[a.id]&&PROGRESS[a.id].nextReviewAt)||'9999-12-31';
@@ -600,7 +784,7 @@ function startMode(mode){
 
 // 科目別演習
 function startSubject(subject){
-  const pool = ALL.filter(q=>q.subject===subject);
+  const pool = mbFilteredAll().filter(q=>q.subject===subject);
   if(pool.length===0){ toast('該当する問題がありません'); return; }
   // 未出題→復習対象→その他 の順で出題
   const today = todayStr();
@@ -667,7 +851,7 @@ function answer(choice){
 
   session.answered++;
   if(correct){ session.correct++; } else { session.wrong++; }
-  saveProgress(q.id, correct); // 忘却曲線を更新
+  saveProgress(q.id, correct).then(() => syncOneAnswer(q.id)); // 忘却曲線を更新 → 送信
 
   if(session.idx >= session.queue.length-1){ document.getElementById('next-btn').textContent='結果を見る'; }
 }
@@ -698,9 +882,10 @@ function restartSame(){
 /* ====== 表示更新 ====== */
 function refreshHome(){
   const today = todayStr();
-  const total = ALL.length;
-  const answered = Object.values(PROGRESS).filter(p=>p.lastAnsweredAt).length;
-  const due = ALL.filter(q=>{ const p=PROGRESS[q.id]; return p && p.nextReviewAt && p.nextReviewAt<=today; }).length;
+  const pool = mbFilteredAll();
+  const total = pool.length;
+  const answered = pool.filter(q=>PROGRESS[q.id]&&PROGRESS[q.id].lastAnsweredAt).length;
+  const due = pool.filter(q=>{ const p=PROGRESS[q.id]; return p && p.nextReviewAt && p.nextReviewAt<=today; }).length;
   document.getElementById('st-total').textContent = total;
   document.getElementById('st-answered').textContent = answered;
   document.getElementById('st-due').textContent = due;
@@ -768,6 +953,77 @@ function refreshStats(){
   box.innerHTML=html;
 }
 
+/* ====== 除外年度 ====== */
+function mbIsYearExcluded(q){
+  if(!MB_EXCLUDE_YEARS || MB_EXCLUDE_YEARS.length===0) return false;
+  const yr = Number(q.year);
+  if(isNaN(yr)) return false;
+  return MB_EXCLUDE_YEARS.includes(`${q.examType}_${yr}`);
+}
+
+// 通常モード（今日の演習・科目別・復習）向けフィルタ
+function mbFilteredAll(){
+  return ALL.filter(q => !mbIsYearExcluded(q));
+}
+
+function mbRenderYearList(){
+  const container = document.getElementById('mb-settings-year-list');
+  if(!container) return;
+  // year が数値の問題から年度一覧を取得
+  const yearSet = new Set();
+  ALL.forEach(q=>{ if(!isNaN(Number(q.year))) yearSet.add(`${q.examType}_${Number(q.year)}`); });
+  const years = Array.from(yearSet).sort();
+  if(years.length===0){
+    container.innerHTML = '<div style="color:var(--sub);text-align:center;padding:16px;">年度データがありません</div>';
+    return;
+  }
+  const typeLabels = { hari_kyu:'はりきゅう', amashi:'あマ指' };
+  // 試験種別ごとにグループ化
+  const groups = {};
+  years.forEach(key=>{
+    const parts = key.split('_');
+    const yr = parts[parts.length-1];
+    const tp = parts.slice(0,-1).join('_');
+    if(!groups[tp]) groups[tp]=[];
+    groups[tp].push({ key, year:yr, examType:tp });
+  });
+  let html='';
+  Object.entries(groups).forEach(([examType, items])=>{
+    const label = typeLabels[examType] || examType;
+    html += `<div style="font-size:calc(12px*var(--fs));color:var(--sub);font-weight:700;letter-spacing:1px;margin:10px 0 6px;">━ ${label}</div>`;
+    html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px;">`;
+    items.forEach(({key, year, examType:et})=>{
+      const checked = MB_EXCLUDE_YEARS.includes(key) ? 'checked' : '';
+      html += `
+        <label style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:${checked?'#fdf0ee':'var(--bg)'};border:1px solid ${checked?'#e8a090':'var(--line)'};border-radius:8px;cursor:pointer;font-size:calc(13px*var(--fs));transition:all 0.15s;" id="mb-yr-label-${et}-${year}">
+          <input type="checkbox" ${checked} data-year="${year}" data-examtype="${et}"
+            style="width:18px;height:18px;accent-color:#c0504d;flex-shrink:0;"
+            onchange="mbOnYearExcludeChange(this)">
+          第${year}回
+        </label>`;
+    });
+    html += `</div>`;
+  });
+  container.innerHTML = html;
+}
+
+async function mbOnYearExcludeChange(cb){
+  const year = cb.dataset.year;
+  const examType = cb.dataset.examtype;
+  const lbl = document.getElementById(`mb-yr-label-${examType}-${year}`);
+  if(lbl){
+    lbl.style.background = cb.checked ? '#fdf0ee' : 'var(--bg)';
+    lbl.style.borderColor = cb.checked ? '#e8a090' : 'var(--line)';
+  }
+  const allCbs = document.querySelectorAll('#mb-settings-year-list input[type="checkbox"]');
+  MB_EXCLUDE_YEARS = [];
+  allCbs.forEach(c=>{ if(c.checked) MB_EXCLUDE_YEARS.push(`${c.dataset.examtype}_${c.dataset.year}`); });
+  try{
+    await mbPut('meta', { key:'excludeYears', value: MB_EXCLUDE_YEARS });
+  }catch(e){}
+  refreshHome();
+}
+
 async function resetProgress(){
   if(!confirm('学習履歴（忘却曲線・解答記録）をすべて消去します。よろしいですか？')) return;
   await pgClear();
@@ -787,6 +1043,51 @@ function toast(msg){
 
 /* ====== 起動 ====== */
 loadData();
+
+// ===== 自動バージョン確認（直接起動時・バックグラウンド復帰時・30分ごと）=====
+// iframe内（統合ホーム経由）は親が管理するためスキップ。直接URLで開いた場合のみ動作。
+(function(){
+  if(window.top !== window.self) return;
+
+  let _cv = null;   // 確認済みバージョン
+  let _ck = false;  // 二重確認防止フラグ
+
+  async function _autoCheck(){
+    if(_ck) return;
+    _ck = true;
+    try{
+      const res = await fetch('./version.json?_=' + Date.now(), {cache:'no-store'});
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      const j = await res.json();
+      const latest = j.version || null;
+      if(!latest){ _ck=false; return; }
+      if(_cv && latest !== _cv){
+        // バージョン変化→リロード（画面保持は直接起動なので考慮不要）
+        location.reload();
+        return;
+      }
+      _cv = latest;
+    }catch(e){
+      if(!_cv){
+        // 起動時に接続不可→オフラインエラー表示
+        document.body.innerHTML =
+          '<div style="position:fixed;inset:0;display:flex;flex-direction:column;' +
+          'align-items:center;justify-content:center;text-align:center;padding:32px;' +
+          'background:#f5f7fa;font-family:sans-serif;color:#2c3e50;">' +
+          '<div style="font-size:48px;margin-bottom:16px;">📶</div>' +
+          '<h2 style="margin-bottom:12px;">オンライン接続が必要です</h2>' +
+          '<p style="color:#7a8a99;">インターネットに接続してから再度お試しください。</p></div>';
+        return;
+      }
+      // 起動後の確認失敗はサイレントにスキップ
+    }finally{ _ck = false; }
+  }
+
+  _autoCheck(); // 起動時
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) _autoCheck(); }); // 復帰時
+  setInterval(()=>{ if(!document.hidden) _autoCheck(); }, 30 * 60 * 1000); // 30分ごと
+})();
+
 </script>
 </body>
 </html>

@@ -53,28 +53,26 @@
     if(document.head){ injectCss(); }
     else { document.addEventListener('DOMContentLoaded', injectCss); }
   }catch(e){}
-
-    // ===== コピー無効化（コンテンツ保護）=====
-    // テキスト選択・右クリック・長押しを抑止。ただし入力欄は除外（カルテ/検索/メモは操作可）。
-    var cpCss = document.createElement('style');
-    cpCss.textContent =
-      'html{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;' +
-      '-webkit-touch-callout:none;}' +
-      'input,textarea,[contenteditable="true"],[contenteditable=""]{' +
-      '-webkit-user-select:text !important;-moz-user-select:text !important;' +
-      '-ms-user-select:text !important;user-select:text !important;-webkit-touch-callout:default !important;}';
-    (document.head||document.documentElement).appendChild(cpCss);
-    var isEditable = function(t){
-      if(!t) return false;
-      var tag=(t.tagName||'').toLowerCase();
-      if(tag==='input'||tag==='textarea') return true;
-      if(t.isContentEditable) return true;
-      return false;
-    };
-    document.addEventListener('contextmenu', function(e){ if(!isEditable(e.target)) e.preventDefault(); }, {capture:true});
-    document.addEventListener('copy', function(e){ if(!isEditable(e.target)) e.preventDefault(); }, {capture:true});
-    document.addEventListener('cut', function(e){ if(!isEditable(e.target)) e.preventDefault(); }, {capture:true});
-    document.addEventListener('dragstart', function(e){ if(!isEditable(e.target)) e.preventDefault(); }, {capture:true});
+  // ===== コピー無効化（コンテンツ保護）=====
+  var cpCss = document.createElement('style');
+  cpCss.textContent =
+    'html{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;' +
+    '-webkit-touch-callout:none;}' +
+    'input,textarea,[contenteditable="true"],[contenteditable=""]{' +
+    '-webkit-user-select:text !important;-moz-user-select:text !important;' +
+    '-ms-user-select:text !important;user-select:text !important;-webkit-touch-callout:default !important;}';
+  (document.head||document.documentElement).appendChild(cpCss);
+  var isEditable = function(t){
+    if(!t) return false;
+    var tag=(t.tagName||'').toLowerCase();
+    if(tag==='input'||tag==='textarea') return true;
+    if(t.isContentEditable) return true;
+    return false;
+  };
+  document.addEventListener('contextmenu', function(e){ if(!isEditable(e.target)) e.preventDefault(); }, {capture:true});
+  document.addEventListener('copy',      function(e){ if(!isEditable(e.target)) e.preventDefault(); }, {capture:true});
+  document.addEventListener('cut',       function(e){ if(!isEditable(e.target)) e.preventDefault(); }, {capture:true});
+  document.addEventListener('dragstart', function(e){ if(!isEditable(e.target)) e.preventDefault(); }, {capture:true});
 
   })();
 </script>
@@ -1028,6 +1026,51 @@ function resetPlay() {
 // 初期化
 renderList();
 updateProgress();
+
+// ===== 自動バージョン確認（直接起動時・バックグラウンド復帰時・30分ごと）=====
+// iframe内（統合ホーム経由）は親が管理するためスキップ。直接URLで開いた場合のみ動作。
+(function(){
+  if(window.top !== window.self) return;
+
+  let _cv = null;   // 確認済みバージョン
+  let _ck = false;  // 二重確認防止フラグ
+
+  async function _autoCheck(){
+    if(_ck) return;
+    _ck = true;
+    try{
+      const res = await fetch('./version.json?_=' + Date.now(), {cache:'no-store'});
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      const j = await res.json();
+      const latest = j.version || null;
+      if(!latest){ _ck=false; return; }
+      if(_cv && latest !== _cv){
+        // バージョン変化→リロード（画面保持は直接起動なので考慮不要）
+        location.reload();
+        return;
+      }
+      _cv = latest;
+    }catch(e){
+      if(!_cv){
+        // 起動時に接続不可→オフラインエラー表示
+        document.body.innerHTML =
+          '<div style="position:fixed;inset:0;display:flex;flex-direction:column;' +
+          'align-items:center;justify-content:center;text-align:center;padding:32px;' +
+          'background:#f5f7fa;font-family:sans-serif;color:#2c3e50;">' +
+          '<div style="font-size:48px;margin-bottom:16px;">📶</div>' +
+          '<h2 style="margin-bottom:12px;">オンライン接続が必要です</h2>' +
+          '<p style="color:#7a8a99;">インターネットに接続してから再度お試しください。</p></div>';
+        return;
+      }
+      // 起動後の確認失敗はサイレントにスキップ
+    }finally{ _ck = false; }
+  }
+
+  _autoCheck(); // 起動時
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) _autoCheck(); }); // 復帰時
+  setInterval(()=>{ if(!document.hidden) _autoCheck(); }, 30 * 60 * 1000); // 30分ごと
+})();
+
 </script>
 </body>
 </html>
