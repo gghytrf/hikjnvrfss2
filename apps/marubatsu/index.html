@@ -537,7 +537,7 @@ async function mbLoadQuestions(){
 //=========================================================
 // ↓ GASのウェブアプリをデプロイして発行されたURLに置き換えてください
 //   (kokushiアプリと同じURLでOK。appフィールドで区別されます)
-const SYNC_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxl9qJANV_iy-AMwqEQmrXzkvHax75kmvGQ3Wmxxlnrb7KuBKAPYOS8G9r7rZmVvfyr/exec';
+const SYNC_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyUuD4I3pZS9yR5iHwwTRrsKuzF5cAvuYb7Zu-QehmqRTkNAct2RGWhCmWg8ovDkvmX/exec';
 const SYNC_APP_ID = 'marubatsu';
 const SYNC_INITIAL_META_KEY = 'syncInitialDone';
 
@@ -559,15 +559,15 @@ function getOrCreateDeviceId() {
 }
 
 function getStudentInfo() {
-  let school = '', studentNo = '';
+  let studentNo = '';
   try {
     const raw = localStorage.getItem('suite_student_info');
     if (raw) {
       const o = JSON.parse(raw);
-      school = o.school || ''; studentNo = o.studentNo || '';
+      studentNo = o.studentNo || '';
     }
   } catch (e) {}
-  return { school, studentNo, deviceId: getOrCreateDeviceId() };
+  return { studentNo, deviceId: getOrCreateDeviceId() };
 }
 
 async function isInitialSyncDone() {
@@ -597,7 +597,6 @@ function enqueueSync(payload) {
   const student = getStudentInfo();
   const record = Object.assign({
     app: SYNC_APP_ID,
-    school: student.school,
     studentNo: student.studentNo,
     deviceId: student.deviceId,
     sentAt: new Date().toISOString()
@@ -686,6 +685,7 @@ async function loadData(){
   buildFilters();
   refreshHome();
   flushSyncQueue(); // 前回送りきれなかった学習データがあれば再送を試みる
+  isInitialSyncDone().then(done => { if (!done) syncFullData(); }); // ホーム画面で「強制再送信」された場合、起動時に自動で全件送信
 }
 
 // 自動のオンライン確認は行わない（データは取り込み済み・オフラインで動作）。

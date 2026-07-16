@@ -1137,7 +1137,7 @@ function dbClear(store) {
 //=========================================================
 // ↓ GASのウェブアプリをデプロイして発行されたURLに置き換えてください
 //   (例: https://script.google.com/macros/s/AKfycb.../exec)
-const SYNC_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxl9qJANV_iy-AMwqEQmrXzkvHax75kmvGQ3Wmxxlnrb7KuBKAPYOS8G9r7rZmVvfyr/exec';
+const SYNC_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyUuD4I3pZS9yR5iHwwTRrsKuzF5cAvuYb7Zu-QehmqRTkNAct2RGWhCmWg8ovDkvmX/exec';
 const SYNC_APP_ID = 'kokushi';
 const SYNC_INITIAL_SETTINGS_KEY = 'syncInitialDone'; // settingsストアのkey
 
@@ -1159,18 +1159,18 @@ function getOrCreateDeviceId() {
   } catch (e) { return 'unknown-device'; }
 }
 
-// ホーム画面(index.html)が localStorage に保存した個人ID（学校名・学生番号）を読む
+// ホーム画面(index.html)が localStorage に保存した個人ID（学生番号）を読む
 // 同一オリジンのiframe内で動くため、直接 localStorage を共有できる。
 function getStudentInfo() {
-  let school = '', studentNo = '';
+  let studentNo = '';
   try {
     const raw = localStorage.getItem('suite_student_info');
     if (raw) {
       const o = JSON.parse(raw);
-      school = o.school || ''; studentNo = o.studentNo || '';
+      studentNo = o.studentNo || '';
     }
   } catch (e) {}
-  return { school, studentNo, deviceId: getOrCreateDeviceId() };
+  return { studentNo, deviceId: getOrCreateDeviceId() };
 }
 
 async function isInitialSyncDone() {
@@ -1207,7 +1207,6 @@ function enqueueSync(payload) {
   const student = getStudentInfo();
   const record = Object.assign({
     app: SYNC_APP_ID,
-    school: student.school,
     studentNo: student.studentNo,
     deviceId: student.deviceId,
     sentAt: new Date().toISOString()
@@ -1282,6 +1281,22 @@ async function syncOneAnswer(qid) {
       muted: !!(state.mutedQuestions && state.mutedQuestions[qid])
     });
   } catch (e) { console.error('sync(answer)エラー:', e); }
+}
+
+// メモ保存・出題除外の切り替えは「解答した瞬間」ではないため syncOneAnswer が呼ばれない。
+// ここで単独に送信し、次にその問題を解くまでシートに反映されない、という取りこぼしを防ぐ。
+// (progressがまだ無い＝未回答の問題を除外設定した場合でも、questionIdだけは送ってメモ/除外状態を記録する)
+async function syncMemoOrMuteChange(qid) {
+  try {
+    const done = await isInitialSyncDone();
+    if (!done) { await syncFullData(); return; }
+    enqueueSync({
+      type: 'memoOrMute', // 'answer'にすると解答したことになってしまい、日別グラフの解答数が水増しされるため区別する
+      progress: state.progress[qid] || { questionId: qid },
+      memo: (state.memos && state.memos[qid] != null) ? state.memos[qid] : null,
+      muted: !!(state.mutedQuestions && state.mutedQuestions[qid])
+    });
+  } catch (e) { console.error('sync(memo/mute)エラー:', e); }
 }
 
 // 本試験形式モードを解き終えた瞬間に1回だけ呼ぶ（採点結果ごと送信）
@@ -1397,6 +1412,7 @@ async function afterDataReady() {
   updateHomeStats();
   renderSettingsYearList();
   flushSyncQueue(); // 前回送りきれなかった学習データがあれば再送を試みる
+  isInitialSyncDone().then(done => { if (!done) syncFullData(); }); // ホーム画面で「強制再送信」された場合、起動時に自動で全件送信
 }
 
 // 問題データ取り込み案内オーバーレイ
@@ -3788,8 +3804,10 @@ function nextQuestion() {
 async function saveMemo() {
   if (!state.currentQuestion) return;
   const text = document.getElementById('memo-area').value;
-  state.memos[state.currentQuestion.id] = text;
-  await dbPut('memos', { questionId: state.currentQuestion.id, text });
+  const qid = state.currentQuestion.id;
+  state.memos[qid] = text;
+  await dbPut('memos', { questionId: qid, text });
+  syncMemoOrMuteChange(qid); // メモはここで送らないと、その問題を再度解くまでシートに反映されないため
   showToast('メモを保存しました');
 }
 
@@ -3849,6 +3867,7 @@ async function toggleMuteQuestion() {
     await dbPut('mutedQuestions', { questionId: q.id, originalSubject: q.subject });
     showToast('「出題しない問題」に設定しました');
   }
+  syncMemoOrMuteChange(q.id); // 出題除外の切り替えはここで送らないと、その問題を再度解くまでシートに反映されないため
 
   // ボタン表示更新
   showMuteBtn(q.id);
@@ -3952,6 +3971,7 @@ async function unmuteQuestion(qid) {
   if (!state.mutedQuestions) return;
   delete state.mutedQuestions[qid];
   try { await dbDelete('mutedQuestions', qid); } catch(e) {}
+  syncMemoOrMuteChange(qid);
   showToast('出題除外を解除しました');
   renderMutedList();
   // 一覧件数を更新

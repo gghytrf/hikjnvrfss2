@@ -293,9 +293,8 @@
 
   <div class="backup-box" id="studentIdBox">
     <div class="backup-title">個人ID設定（データ分析用）</div>
-    <div class="backup-note">学校名・学生番号を入力すると、国試学習・〇×問題集アプリの学習データ送信時に個人を識別するIDとして使われます（分析目的）。未入力でも各アプリは通常どおり使えます。学生番号は一度保存すると変更できなくなります（下部の「学習データをリセット」で再設定可能）。</div>
+    <div class="backup-note">学生番号を入力すると、国試学習・〇×問題集アプリの学習データ送信時に個人を識別するIDとして使われます（分析目的、端末IDと組み合わせて識別します）。未入力でも各アプリは通常どおり使えます。学生番号は一度保存すると変更できなくなります（下部の「学習データをリセット」で再設定可能）。</div>
     <div class="backup-btns" style="flex-wrap:wrap">
-      <input type="text" id="studentSchool" placeholder="学校名（例：大阪行岡医療専門学校長柄校）" style="flex:1;min-width:180px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;font-size:calc(13px*var(--fs));background:#fff">
       <input type="text" id="studentNo" placeholder="学生番号" style="flex:1;min-width:120px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;font-size:calc(13px*var(--fs));background:#fff">
     </div>
     <div class="backup-note" id="studentNoLockNote" style="display:none;margin-top:6px;color:var(--cinnabar,#b4442e)">🔒 学生番号は設定済みのため変更できません。</div>
@@ -315,9 +314,17 @@
     </div>
   </div>
 
+  <div class="backup-box" id="resyncBox">
+    <div class="backup-title">学習データの強制再送信</div>
+    <div class="backup-note">GASのデプロイURLを変更した場合など、これまでの学習データ（進度・メモ・出題除外）をもう一度まとめて送信し直したいときに使います。端末側の学習データは削除されません。設定すると、次に国試学習・〇×問題集アプリのいずれかを開いた時に自動で全件送信されます。</div>
+    <div class="backup-btns">
+      <button class="btn-backup" onclick="forceResync()">🔄 次回起動時に全データを再送信</button>
+    </div>
+  </div>
+
   <div class="backup-box" id="resetBox">
     <div class="backup-title">学習データのリセット</div>
-    <div class="backup-note">国試学習・〇×問題集アプリの学習履歴（進度・メモ・出題除外・本試験セッション・設定・未送信の送信待ちデータ）と、上の個人ID（学校名・学生番号）をすべて削除します。学生番号を入力し直したい場合はここからリセットしてください。<b>この操作は取り消せません。</b>必要ならリセット前に「全データをバックアップ」で保存してください。</div>
+    <div class="backup-note">国試学習・〇×問題集アプリの学習履歴（進度・メモ・出題除外・本試験セッション・設定・未送信の送信待ちデータ）と、上の個人ID（学生番号）をすべて削除します。学生番号を入力し直したい場合はここからリセットしてください。<b>この操作は取り消せません。</b>必要ならリセット前に「全データをバックアップ」で保存してください。</div>
     <div class="backup-btns">
       <button class="btn-backup" onclick="resetStudyData()" style="color:#b4442e;border-color:#e0b3a8">🗑 学習データをリセット</button>
     </div>
@@ -341,6 +348,18 @@
 </section>
 
 <div id="toast"></div>
+
+<div id="studentGateOverlay" style="display:none;position:fixed;inset:0;background:rgba(26,24,20,.55);z-index:9999;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#fffdf8;border-radius:16px;padding:24px;max-width:360px;width:100%;box-shadow:0 8px 30px rgba(0,0,0,.3)">
+    <div style="font-family:'Shippori Mincho',serif;font-weight:700;font-size:16px;color:var(--indigo);margin-bottom:10px">学生番号の設定が必要です</div>
+    <div style="font-size:12.5px;color:#7a6c50;line-height:1.7;margin-bottom:14px">各アプリを利用するには、先に学生番号を設定してください（学習データの分析に使用します）。一度設定すると、学習データをリセットするまで変更できません。</div>
+    <input type="text" id="gateStudentNo" placeholder="学生番号" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;font-size:14px;margin-bottom:12px;box-sizing:border-box">
+    <div style="display:flex;gap:8px">
+      <button onclick="cancelStudentGate()" style="flex:1;border:1px solid var(--line);background:#fff;color:var(--indigo);padding:10px;border-radius:9px;font:inherit;font-size:13px;cursor:pointer">キャンセル</button>
+      <button onclick="confirmStudentGate()" style="flex:1;border:1px solid var(--indigo);background:var(--indigo);color:#fff;padding:10px;border-radius:9px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">設定して進む</button>
+    </div>
+  </div>
+</div>
 
 <script>
 /* ============================================================
@@ -378,14 +397,14 @@ function getOrCreateDeviceId(){
   }catch(e){ return 'unknown-device'; }
 }
 
-/* ===== 個人ID設定（学校名・学生番号）=====
+/* ===== 個人ID設定（学生番号）=====
    国試学習・〇×問題集アプリ（同一オリジンのiframe内）が localStorage を共有して読み取り、
-   GASへの学習データ送信時に個人IDとして利用する。 */
+   GASへの学習データ送信時に個人IDとして利用する（端末IDと組み合わせて識別）。 */
 const STUDENT_INFO_KEY = 'suite_student_info';
 function loadStudentInfo(){
   try{
-    return JSON.parse(localStorage.getItem(STUDENT_INFO_KEY)||'null') || {school:'', studentNo:''};
-  }catch(e){ return {school:'', studentNo:''}; }
+    return JSON.parse(localStorage.getItem(STUDENT_INFO_KEY)||'null') || {studentNo:''};
+  }catch(e){ return {studentNo:''}; }
 }
 function applyStudentNoLock(studentNo){
   const ne = document.getElementById('studentNo');
@@ -395,14 +414,13 @@ function applyStudentNoLock(studentNo){
   if(note) note.style.display = locked ? 'block' : 'none';
 }
 function saveStudentInfo(){
-  const school = (document.getElementById('studentSchool').value||'').trim();
   const noEl = document.getElementById('studentNo');
   const studentNo = (noEl.value||'').trim();
   const prev = loadStudentInfo();
   // 学生番号は一度保存されたら変更不可（リセットするまで既存値を維持）
   const finalNo = (prev.studentNo && prev.studentNo.trim()) ? prev.studentNo : studentNo;
   try{
-    localStorage.setItem(STUDENT_INFO_KEY, JSON.stringify({school, studentNo: finalNo}));
+    localStorage.setItem(STUDENT_INFO_KEY, JSON.stringify({studentNo: finalNo}));
     noEl.value = finalNo;
     applyStudentNoLock(finalNo);
     showToast('個人IDを保存しました');
@@ -424,6 +442,30 @@ function idbClearStore(dbName, storeName){
   });
 }
 
+function idbDeleteKey(dbName, storeName, key){
+  return new Promise((resolve)=>{
+    const r = indexedDB.open(dbName);
+    r.onsuccess = ()=>{
+      const db = r.result;
+      if(!db.objectStoreNames.contains(storeName)){ db.close(); resolve(); return; }
+      const tx = db.transaction(storeName, 'readwrite');
+      tx.objectStore(storeName).delete(key);
+      tx.oncomplete = ()=>{ db.close(); resolve(); };
+      tx.onerror = ()=>{ db.close(); resolve(); };
+    };
+    r.onerror = ()=>resolve();
+  });
+}
+
+async function forceResync(){
+  if(!confirm('次に国試学習・〇×問題集アプリを開いた時、これまでの学習データを丸ごと再送信します。\n学習データ自体は削除されません。よろしいですか？')) return;
+  await Promise.all([
+    idbDeleteKey('StudyAppDB', 'settings', 'syncInitialDone'),
+    idbDeleteKey('MarubatsuDB', 'meta', 'syncInitialDone'),
+  ]);
+  showToast('設定しました。次にアプリを開くと自動で全データが再送信されます。');
+}
+
 async function resetStudyData(){
   const typed = prompt('国試学習・〇×問題集の学習データと個人ID（学生番号含む）をすべて削除します。\nこの操作は取り消せません。続行するには「リセット」と入力してください。');
   if(typed !== 'リセット'){ showToast('キャンセルしました'); return; }
@@ -442,9 +484,7 @@ async function resetStudyData(){
   try{ localStorage.removeItem('sync_queue_kokushi'); }catch(e){}
   try{ localStorage.removeItem('sync_queue_marubatsu'); }catch(e){}
 
-  const se = document.getElementById('studentSchool');
   const ne = document.getElementById('studentNo');
-  if(se) se.value = '';
   if(ne) ne.value = '';
   applyStudentNoLock('');
 
@@ -452,9 +492,7 @@ async function resetStudyData(){
 }
 (function initStudentInfoBox(){
   const info = loadStudentInfo();
-  const se = document.getElementById('studentSchool');
   const ne = document.getElementById('studentNo');
-  if(se) se.value = info.school;
   if(ne) ne.value = info.studentNo;
   applyStudentNoLock(info.studentNo);
   const did = document.getElementById('deviceIdLabel');
@@ -483,8 +521,42 @@ const appbar  = document.getElementById('appbar');
 const appTitle= document.getElementById('appTitle');
 let currentApp = null;
 
+let pendingAppKey = null;
+let pendingAppFromPop = undefined;
+
+function showStudentGate(){
+  const el = document.getElementById('studentGateOverlay');
+  const input = document.getElementById('gateStudentNo');
+  if(input) input.value = '';
+  if(el) el.style.display = 'flex';
+  setTimeout(() => { if(input) input.focus(); }, 50);
+}
+function cancelStudentGate(){
+  pendingAppKey = null;
+  document.getElementById('studentGateOverlay').style.display = 'none';
+}
+function confirmStudentGate(){
+  const val = (document.getElementById('gateStudentNo').value || '').trim();
+  if(!val){ alert('学生番号を入力してください'); return; }
+  try{ localStorage.setItem(STUDENT_INFO_KEY, JSON.stringify({studentNo: val})); }catch(e){}
+  const ne = document.getElementById('studentNo');
+  if(ne) ne.value = val;
+  applyStudentNoLock(val);
+  document.getElementById('studentGateOverlay').style.display = 'none';
+  const key = pendingAppKey, fromPop = pendingAppFromPop;
+  pendingAppKey = null;
+  if(key) openApp(key, fromPop);
+}
+
 function openApp(key, fromPop){
   const app = APPS[key]; if(!app) return;
+  const info = loadStudentInfo();
+  if(!info.studentNo || !info.studentNo.trim()){
+    pendingAppKey = key;
+    pendingAppFromPop = fromPop;
+    showStudentGate();
+    return;
+  }
   currentApp = key;
   appTitle.textContent = app.title;
   appbar.style.setProperty('--bar', app.bar);
