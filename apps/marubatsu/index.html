@@ -489,8 +489,15 @@ function mbOpenDB(){
       // questionData は廃止（毎回fetchするためIndexedDB保存不要）
       if(db.objectStoreNames.contains('questionData')) db.deleteObjectStore('questionData');
     };
-    req.onsuccess = ()=>resolve(req.result);
+    req.onsuccess = ()=>{
+      const db = req.result;
+      // ホーム画面のリセット等でDBの構成変更が要求されたら接続を明け渡す
+      // （これをしないと相手がblockedで止まり、アプリが固まる原因になる）
+      db.onversionchange = ()=>{ try{ db.close(); }catch(e){} };
+      resolve(db);
+    };
     req.onerror = ()=>reject(req.error);
+    req.onblocked = ()=>{ console.warn('IndexedDBのオープンがブロックされています'); };
   });
 }
 function mbGetAll(store){
@@ -540,6 +547,9 @@ async function mbLoadQuestions(){
 const SYNC_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyUuD4I3pZS9yR5iHwwTRrsKuzF5cAvuYb7Zu-QehmqRTkNAct2RGWhCmWg8ovDkvmX/exec';
 const SYNC_APP_ID = 'marubatsu';
 const SYNC_INITIAL_META_KEY = 'syncInitialDone';
+// full送信の「版」。この数字を上げると、全端末が次回起動時に一度だけfullを再送する。
+// （旧版は value:true を保存していたため、それも「版が古い」として自動的に再送対象になる）
+const SYNC_FULL_VERSION = 2;
 
 // 端末ID（UUID）：ホーム画面(index.html)側と同じキーを使い、未生成なら自分で生成する
 const DEVICE_ID_KEY = 'suite_device_uuid';
@@ -573,11 +583,13 @@ function getStudentInfo() {
 async function isInitialSyncDone() {
   try {
     const rec = await mbGet('meta', SYNC_INITIAL_META_KEY);
-    return !!(rec && rec.value);
+    if (!rec || !rec.value) return false;
+    // 保存されている版が現行版と一致するときだけ「送信済み」とみなす
+    return rec.value === SYNC_FULL_VERSION;
   } catch (e) { return false; }
 }
 async function markInitialSyncDone() {
-  try { await mbPut('meta', { key: SYNC_INITIAL_META_KEY, value: true }); } catch (e) {}
+  try { await mbPut('meta', { key: SYNC_INITIAL_META_KEY, value: SYNC_FULL_VERSION }); } catch (e) {}
 }
 
 //=========================================================

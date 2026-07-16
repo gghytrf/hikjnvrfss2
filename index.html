@@ -316,7 +316,7 @@
 
   <div class="backup-box" id="resetBox">
     <div class="backup-title">学習データのリセット</div>
-    <div class="backup-note">国試学習・〇×問題集アプリの学習履歴（進度・メモ・出題除外・本試験セッション・設定・未送信の送信待ちデータ）と、上の個人ID（学生番号）をすべて削除します。学生番号を入力し直したい場合はここからリセットしてください。<b>この操作は取り消せません。</b>必要ならリセット前に「全データをバックアップ」で保存してください。</div>
+    <div class="backup-note">国試学習・〇×問題集アプリの学習履歴（進度・メモ・出題除外・本試験セッション・設定・未送信の送信待ちデータ）と、上の個人ID（学生番号）をすべて削除します。あわせて<b>アプリのキャッシュも破棄して再読み込み</b>します（設定を初期化するため、配信ファイルも取得し直します。問題データはネットから読み直されます）。学生番号を入力し直したい場合はここからリセットしてください。<b>この操作は取り消せません。</b>必要ならリセット前に「全データをバックアップ」で保存してください。</div>
     <div class="backup-btns">
       <button class="btn-backup" onclick="resetStudyData()" style="color:#b4442e;border-color:#e0b3a8">🗑 学習データをリセット</button>
     </div>
@@ -425,83 +425,146 @@ function saveStudentInfo(){
     ・アプリがメモリ上に持つ state.progress / memos / mutedQuestions が残り、
       次に1問解いた瞬間に古い値がそのままIndexedDBへ書き戻される
     ・送信中(await fetch)の flushSyncQueue が、あとから送信待ちキューを書き戻す
-    ・アプリがDB接続を握ったままだと deleteDatabase がブロックされる
-   src を about:blank にすると iframe の文書ごと破棄され、上記がすべて止まる。 */
+   about:blank の読み込み完了を待つことで、前の文書が確実に破棄されたことを確認する。 */
 function unloadAppFrame(){
-  try{
-    if(frame){ frame.onload = null; frame.src = 'about:blank'; }
-    currentApp = null;
-  }catch(e){}
-}
-
-/* DBごと削除する。開いている接続が残っているとblockedになるので、
-   先に unloadAppFrame() を呼んでから使うこと。ダメだった場合は false を返す。 */
-function idbDeleteDatabase(dbName, timeoutMs){
   return new Promise((resolve)=>{
-    let settled = false;
-    const finish = (ok)=>{ if(!settled){ settled = true; resolve(ok); } };
-    let req;
-    try{ req = indexedDB.deleteDatabase(dbName); }catch(e){ finish(false); return; }
-    req.onsuccess = ()=>finish(true);
-    req.onerror   = ()=>finish(false);
-    req.onblocked = ()=>{}; // 別タブ等が接続を握っている → 下のタイムアウトでフォールバックへ
-    setTimeout(()=>finish(false), timeoutMs || 3000);
+    try{
+      currentApp = null;
+      if(!frame || !frame.getAttribute('src') || frame.src === 'about:blank'){ resolve(); return; }
+      let settled = false;
+      const finish = ()=>{ if(!settled){ settled = true; frame.onload = null; resolve(); } };
+      frame.onload = finish;          // about:blank の読み込み完了＝前の文書は破棄済み
+      frame.src = 'about:blank';
+      setTimeout(finish, 1500);       // 念のための打ち切り
+    }catch(e){ resolve(); }
   });
 }
 
-/* フォールバック：DB内の全ストアを空にする。
-   ストア名はDBから取得するので、将来ストアが増えても消し漏れない。 */
-function idbClearAllStores(dbName){
+/* DB内の全ストアを空にする。
+   ・ストア名はDBから取得するので、将来ストアが増えても消し漏れない
+   ・バージョン変更を伴わないので、接続が残っていてもブロックされない
+   ・存在しないDBは「作らずに」何もしないで抜ける（後述）
+   ・何があっても必ず resolve する（リセット処理が固まらないようにするため）
+
+   ※ deleteDatabase は使わない。接続が1つでも残っているとblockedのまま完了せず、
+     以後そのDB名への open がすべてそのリクエストの後ろで待たされるため。
+   ※ バージョンを指定せずに open すると、DBが無い場合に「バージョン1・ストア0個」の
+     空DBが新規作成されてしまう。するとアプリが次にバージョン6で開く際にアップグレードが
+     必要になり、接続が1つでも残っていると blocked で開けなくなる（＝アプリが起動しない）。
+     そのため onupgradeneeded（＝DBが存在しなかった合図）では中断してDBを作らせない。 */
+function idbClearAllStores(dbName, timeoutMs){
   return new Promise((resolve)=>{
+    let settled = false, creating = false;
+    const finish = ()=>{ if(!settled){ settled = true; resolve(); } };
+    const timer = setTimeout(finish, timeoutMs || 5000);
+    const done = (db)=>{ try{ if(db) db.close(); }catch(e){} clearTimeout(timer); finish(); };
     let req;
-    try{ req = indexedDB.open(dbName); }catch(e){ resolve(); return; }
+    try{ req = indexedDB.open(dbName); }catch(e){ done(null); return; }
+
+    req.onupgradeneeded = (e)=>{
+      // このDBは存在しなかった＝消すべき学習データも無い。
+      // ここで中断すればDBは作成されず、アプリ側は今までどおり自分のバージョンで新規作成できる。
+      creating = true;
+      try{ e.target.transaction.abort(); }catch(_){ }
+    };
     req.onsuccess = ()=>{
       const db = req.result;
       const names = Array.prototype.slice.call(db.objectStoreNames);
-      if(names.length === 0){ db.close(); resolve(); return; }
+      if(creating || names.length === 0){ done(db); return; }
       try{
         const tx = db.transaction(names, 'readwrite');
         names.forEach(n => tx.objectStore(n).clear());
-        tx.oncomplete = ()=>{ db.close(); resolve(); };
-        tx.onerror    = ()=>{ db.close(); resolve(); };
-        tx.onabort    = ()=>{ db.close(); resolve(); };
-      }catch(e){ db.close(); resolve(); }
+        tx.oncomplete = ()=>done(db);
+        tx.onerror    = ()=>done(db);
+        tx.onabort    = ()=>done(db);
+      }catch(e){ done(db); }
     };
-    req.onerror   = ()=>resolve();
-    req.onblocked = ()=>resolve();
+    req.onerror   = ()=>done(null); // 上のabortもここに来る（DB未作成のまま正常終了）
+    req.onblocked = ()=>done(null);
   });
+}
+
+/* Cache Storage をすべて破棄する。
+   リセットは設定ごと初期化する操作なので、配信ファイルのキャッシュも作り直させる。
+   ※このindex.htmlは最上位フレームなので、冒頭のiframe用ガード（cachesの無効化）は掛かっていない。 */
+function clearAllCaches(){
+  return new Promise((resolve)=>{
+    try{
+      if(!('caches' in window) || !window.caches || !window.caches.keys){ resolve(); return; }
+      const timer = setTimeout(resolve, 5000); // 応答が無くてもリセットを止めない
+      Promise.resolve(window.caches.keys())
+        .then(keys => Promise.all(keys.map(k => window.caches.delete(k))))
+        .catch(()=>{})
+        .then(()=>{ clearTimeout(timer); resolve(); });
+    }catch(e){ resolve(); }
+  });
+}
+
+/* Service Worker の登録を解除する。
+   解除後の再読み込みで sw.js が登録し直され、キャッシュが最新の内容で作られる。 */
+function unregisterServiceWorkers(){
+  return new Promise((resolve)=>{
+    try{
+      if(!('serviceWorker' in navigator) || !navigator.serviceWorker.getRegistrations){ resolve(); return; }
+      const timer = setTimeout(resolve, 5000);
+      navigator.serviceWorker.getRegistrations()
+        .then(rs => Promise.all(rs.map(r => r.unregister())))
+        .catch(()=>{})
+        .then(()=>{ clearTimeout(timer); resolve(); });
+    }catch(e){ resolve(); }
+  });
+}
+
+function clearLocalStudyKeys(){
+  try{ localStorage.removeItem(STUDENT_INFO_KEY); }catch(e){}
+  try{ localStorage.removeItem('sync_queue_kokushi'); }catch(e){}     // index-4 の SYNC_QUEUE_KEY と一致
+  try{ localStorage.removeItem('sync_queue_marubatsu'); }catch(e){}   // index-5 の SYNC_QUEUE_KEY と一致
+}
+function clearStudentNoUI(){
+  const ne = document.getElementById('studentNo');
+  if(ne){ ne.value = ''; }
+  applyStudentNoLock('');
 }
 
 async function resetStudyData(){
   const typed = prompt('国試学習・〇×問題集の学習データと個人ID（学生番号含む）をすべて削除します。\nこの操作は取り消せません。続行するには「リセット」と入力してください。');
   if(typed !== 'リセット'){ showToast('キャンセルしました'); return; }
 
-  // ① 先にアプリ(iframe)を破棄する。これより後に書き戻しが発生しないようにするため、
-  //    localStorage・IndexedDB を触るより前に行うことが重要。
-  unloadAppFrame();
-  await new Promise(r => setTimeout(r, 200)); // 文書の破棄・DB接続の解放を待つ
+  try{
+    // ① 先にアプリ(iframe)を破棄する。これ以降、アプリ側からの書き戻しは発生しない。
+    await unloadAppFrame();
 
-  // ② 送信待ちキューと個人IDを削除
-  //    （キューはlocalStorageのみに保持。iframeを破棄済みなので書き戻される心配はない）
-  try{ localStorage.removeItem(STUDENT_INFO_KEY); }catch(e){}
-  try{ localStorage.removeItem('sync_queue_kokushi'); }catch(e){}     // index-4 の SYNC_QUEUE_KEY と一致
-  try{ localStorage.removeItem('sync_queue_marubatsu'); }catch(e){}   // index-5 の SYNC_QUEUE_KEY と一致
+    // ② 個人ID・送信待ちキューを削除し、その場で画面へ反映する。
+    //    IndexedDBの処理より前に行うことで、DB側で何が起きても学生番号は必ず再設定できる状態になる。
+    clearLocalStudyKeys();
+    clearStudentNoUI();
 
-  // ③ 学習データ本体（IndexedDB）を削除。DBごと消し、ブロックされたら全ストアclearへ。
-  for(const dbName of ['StudyAppDB', 'MarubatsuDB']){
-    const ok = await idbDeleteDatabase(dbName, 3000);
-    if(!ok) await idbClearAllStores(dbName);
+    // ③ 学習データ本体（IndexedDB）を空にする
+    await idbClearAllStores('StudyAppDB');   // 国試学習：進度・メモ・出題除外・本試験セッション・設定
+    await idbClearAllStores('MarubatsuDB');  // 〇×問題集：進度・設定
+
+    // ④ ②以降に書き戻された分がないか最終確認
+    clearLocalStudyKeys();
+    clearStudentNoUI();
+
+    // ⑤ キャッシュとService Workerを破棄する。
+    //    設定ごと初期化する操作なので、配信ファイルも取得し直させる。
+    //    （SWが古いアプリ本体を配信し続けると、リセット後も以前の挙動のままになるため）
+    await clearAllCaches();
+    await unregisterServiceWorkers();
+
+    // ⑥ 再読み込み。SWの再登録とキャッシュの作り直しはリロード後に行われる。
+    //    自動更新フローの残骸で二重リロードにならないよう、フラグを消してから実行する。
+    try{ sessionStorage.removeItem('forceSwReload'); }catch(e){}
+    try{ sessionStorage.removeItem('restoreApp'); }catch(e){}
+    showToast('学習データとキャッシュをリセットしました。再読み込みします…');
+    setTimeout(reloadNow, 1200);
+  }catch(e){
+    // 失敗しても画面だけは必ず操作可能な状態に戻す
+    clearLocalStudyKeys();
+    clearStudentNoUI();
+    showToast('リセット中にエラーが発生しました: ' + ((e && e.message) ? e.message : e));
   }
-
-  // ④ 念のため、②の後に書き戻された分がないか確認して消す
-  try{ localStorage.removeItem('sync_queue_kokushi'); }catch(e){}
-  try{ localStorage.removeItem('sync_queue_marubatsu'); }catch(e){}
-
-  const ne = document.getElementById('studentNo');
-  if(ne) ne.value = '';
-  applyStudentNoLock('');
-
-  showToast('学習データをリセットしました。学生番号を再設定できます。');
 }
 (function initStudentInfoBox(){
   const info = loadStudentInfo();
@@ -682,7 +745,7 @@ document.addEventListener('visibilitychange', ()=>{
   if(!document.hidden) autoCheckVersion();
 });
 
-// アプリ起動中の定期確認（10分ごと）
+// アプリ起動中の定期確認（30分ごと）
 setInterval(()=>{ if(!document.hidden) autoCheckVersion(); }, 30 * 60 * 1000);
 
 let toastT;
