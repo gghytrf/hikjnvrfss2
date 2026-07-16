@@ -1203,7 +1203,7 @@ function saveSyncQueue(q) {
 // キューに積んでから送信を試みる（積む時点でlocalStorageに保存されるので、
 // このタイミングでアプリを閉じてもタブを閉じても、データそのものは消えない）
 function enqueueSync(payload) {
-  if (!SYNC_ENDPOINT || SYNC_ENDPOINT.indexOf('★') !== -1) return; // 未設定時は何もしない
+  if (!SYNC_ENDPOINT || SYNC_ENDPOINT.indexOf('★') !== -1) return false; // 未設定時は何もしない
   const student = getStudentInfo();
   const record = Object.assign({
     app: SYNC_APP_ID,
@@ -1215,6 +1215,7 @@ function enqueueSync(payload) {
   q.push(record);
   saveSyncQueue(q);
   flushSyncQueue();
+  return true; // localStorageのキューに積めた＝いずれ必ず送られる
 }
 
 let _flushingSyncQueue = false;
@@ -1254,26 +1255,44 @@ async function flushSyncQueue() {
 window.addEventListener('online', flushSyncQueue);
 
 // 初回のみ：これまでの全学習データ（進捗・メモ・出題除外）をまとめて送信
+// 呼ぶのはアプリ起動時（afterDataReady）だけ。解答やメモ操作からは呼ばない。
+let _fullSyncStarted = false; // 同一セッション内での二重送信よけ
 async function syncFullData() {
-  const [progressList, memoList, mutedList] = await Promise.all([
-    dbGetAll('progress'), dbGetAll('memos'), dbGetAll('mutedQuestions')
-  ]);
-  enqueueSync({
-    type: 'full',
-    progress: progressList,
-    memos: memoList,
-    mutedQuestions: mutedList
-  });
-  // ※初回完了フラグ(markInitialSyncDone)は、実際に送信できた時点(flushSyncQueue内)で立てる。
-  //   ここで即座に立てないのは、オフライン時にフラグだけ立って全データが二度と送られなくなる事故を防ぐため。
+  if (_fullSyncStarted) return;
+  _fullSyncStarted = true;
+  try {
+    const [progressList, memoList, mutedList] = await Promise.all([
+      dbGetAll('progress'), dbGetAll('memos'), dbGetAll('mutedQuestions')
+    ]);
+    const queued = enqueueSync({
+      type: 'full',
+      progress: progressList,
+      memos: memoList,
+      mutedQuestions: mutedList
+    });
+    // キューに積んだ時点で初回完了とみなす。キューはlocalStorageに残るため、
+    // オフラインでもこの後の起動・オンライン復帰時に必ず再送される（＝取りこぼしはない）。
+    // 送信完了まで待つと、その間の解答が「初回未完了」と判定されfullが何度も送られてしまう。
+    if (queued) await markInitialSyncDone();
+  } catch (e) {
+    _fullSyncStarted = false; // 失敗したら次回の起動でやり直す
+    console.error('sync(full)エラー:', e);
+  }
+}
+
+// 起動時に1回だけ呼ぶ：未送信のキューを再送し、初回なら全データを送る
+async function syncOnStartup() {
+  try {
+    if (!(await isInitialSyncDone())) await syncFullData();
+    else flushSyncQueue(); // 前回送りきれなかった分の再送
+  } catch (e) { console.error('sync(startup)エラー:', e); }
 }
 
 // 通常モード（今日の演習・科目別演習・復習モード）で1問解いた直後に呼ぶ
-// 初回はここでまず全データを送ってから以降は1問ずつの差分送信に切り替わる
+// full は起動時に送信済みのため、ここでは常に1問ぶんの差分だけを送る。
+// （旧版はここでfullに化けてしまい、メモ・出題除外の列が空のまま記録されていた）
 async function syncOneAnswer(qid) {
   try {
-    const done = await isInitialSyncDone();
-    if (!done) { await syncFullData(); return; }
     enqueueSync({
       type: 'answer',
       progress: state.progress[qid] || null,
@@ -1288,8 +1307,6 @@ async function syncOneAnswer(qid) {
 // (progressがまだ無い＝未回答の問題を除外設定した場合でも、questionIdだけは送ってメモ/除外状態を記録する)
 async function syncMemoOrMuteChange(qid) {
   try {
-    const done = await isInitialSyncDone();
-    if (!done) { await syncFullData(); return; }
     enqueueSync({
       type: 'memoOrMute', // 'answer'にすると解答したことになってしまい、日別グラフの解答数が水増しされるため区別する
       progress: state.progress[qid] || { questionId: qid },
@@ -1302,15 +1319,15 @@ async function syncMemoOrMuteChange(qid) {
 // 本試験形式モードを解き終えた瞬間に1回だけ呼ぶ（採点結果ごと送信）
 async function syncExamFinished(sessionId, examType, correctCount, total, subjectStats, items) {
   try {
-    const done = await isInitialSyncDone();
-    if (!done) { await syncFullData(); }
     enqueueSync({
       type: 'examFinished',
       sessionId: sessionId || null,
       examType: examType || null,
       correctCount, total,
       subjectStats: subjectStats || {},
-      items: items || [] // [{questionId, isCorrect}]
+      // items[].progress に更新後の進捗（correctCount等）を同梱する。
+      // これが無いとシート側で回答数が空欄になり、既存の回答数まで消えてしまう。
+      items: items || [] // [{questionId, isCorrect, progress}]
     });
   } catch (e) { console.error('sync(exam)エラー:', e); }
 }
@@ -1411,7 +1428,7 @@ async function afterDataReady() {
 
   updateHomeStats();
   renderSettingsYearList();
-  flushSyncQueue(); // 前回送りきれなかった学習データがあれば再送を試みる
+  syncOnStartup(); // 初回なら全学習データを送信／それ以外は未送信分の再送を試みる
 }
 
 // 問題データ取り込み案内オーバーレイ
@@ -2084,7 +2101,8 @@ async function finishExam() {
   let correctCount = 0;
   const subjectStats = {};
   const syncItems = [];
-  examState.questions.forEach((q, idx) => {
+  for (let idx = 0; idx < examState.questions.length; idx++) {
+    const q = examState.questions[idx];
     const userAns = examState.answers[idx];
     const orderInfo = examState.choiceOrders[idx];
     const correctSet = orderInfo ? orderInfo.mappedCorrect : q.correctAnswers;
@@ -2097,10 +2115,15 @@ async function finishExam() {
     // 学習履歴に反映(元の問題IDで保存)
     // ※採点（試験を最後まで終えた場合）にのみ到達する。中断・破棄の場合はここに来ないため記録されない。
     if (examState.recordHistory) {
-      saveProgress(q.id, isCorrect);
-      syncItems.push({ questionId: q.id, isCorrect });
+      await saveProgress(q.id, isCorrect); // 保存を待ってから、更新後の進捗を送信データに載せる
+      const pr = state.progress[q.id];
+      syncItems.push({
+        questionId: q.id,
+        isCorrect: isCorrect,
+        progress: pr ? Object.assign({}, pr) : null // 回答数・忘却曲線レベルもシートへ反映させる
+      });
     }
-  });
+  }
 
   // 本試験モードを解き終えた瞬間：1回だけまとめて送信（問題ごとには送らない）
   if (examState.recordHistory && syncItems.length > 0) {

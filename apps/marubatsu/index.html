@@ -593,7 +593,7 @@ function saveSyncQueue(q) {
 }
 
 function enqueueSync(payload) {
-  if (!SYNC_ENDPOINT || SYNC_ENDPOINT.indexOf('★') !== -1) return; // 未設定時は何もしない
+  if (!SYNC_ENDPOINT || SYNC_ENDPOINT.indexOf('★') !== -1) return false; // 未設定時は何もしない
   const student = getStudentInfo();
   const record = Object.assign({
     app: SYNC_APP_ID,
@@ -605,6 +605,7 @@ function enqueueSync(payload) {
   q.push(record);
   saveSyncQueue(q);
   flushSyncQueue();
+  return true; // localStorageのキューに積めた＝いずれ必ず送られる
 }
 
 let _flushingSyncQueue = false;
@@ -638,18 +639,34 @@ async function flushSyncQueue() {
 }
 window.addEventListener('online', flushSyncQueue);
 
-// 初回のみ：これまでの全進捗データをまとめて送信
+// 初回のみ：これまでの全進捗データをまとめて送信（呼ぶのはアプリ起動時だけ）
+let _fullSyncStarted = false;
 async function syncFullData() {
-  const progressList = await pgGetAll();
-  enqueueSync({ type: 'full', progress: progressList });
-  // ※初回完了フラグは実際に送信できた時点(flushSyncQueue内)で立てる（オフライン時の事故防止）
+  if (_fullSyncStarted) return;
+  _fullSyncStarted = true;
+  try {
+    const progressList = await pgGetAll();
+    const queued = enqueueSync({ type: 'full', progress: progressList });
+    // キューに積んだ時点で初回完了とみなす（キューはlocalStorageに残るので取りこぼしはない）。
+    // 送信完了まで待つと、その間の解答が「初回未完了」と判定されfullが重複送信されてしまう。
+    if (queued) await markInitialSyncDone();
+  } catch (e) {
+    _fullSyncStarted = false;
+    console.error('sync(full)エラー:', e);
+  }
 }
 
-// 1問解いた直後に呼ぶ（初回は全データ送信に切り替わり、以降は差分のみ）
+// 起動時に1回だけ呼ぶ：未送信のキューを再送し、初回なら全データを送る
+async function syncOnStartup() {
+  try {
+    if (!(await isInitialSyncDone())) await syncFullData();
+    else flushSyncQueue();
+  } catch (e) { console.error('sync(startup)エラー:', e); }
+}
+
+// 1問解いた直後に呼ぶ（full は起動時に送信済みなので、ここでは常に差分のみ）
 async function syncOneAnswer(qid) {
   try {
-    const done = await isInitialSyncDone();
-    if (!done) { await syncFullData(); return; }
     enqueueSync({ type: 'answer', progress: PROGRESS[qid] || null });
   } catch (e) { console.error('sync(answer)エラー:', e); }
 }
@@ -684,7 +701,7 @@ async function loadData(){
   if(_ov) _ov.remove();
   buildFilters();
   refreshHome();
-  flushSyncQueue(); // 前回送りきれなかった学習データがあれば再送を試みる
+  syncOnStartup(); // 初回なら全学習データを送信／それ以外は未送信分の再送を試みる
 }
 
 // 自動のオンライン確認は行わない（データは取り込み済み・オフラインで動作）。
