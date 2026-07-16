@@ -314,14 +314,6 @@
     </div>
   </div>
 
-  <div class="backup-box" id="resyncBox">
-    <div class="backup-title">学習データの強制再送信</div>
-    <div class="backup-note">GASのデプロイURLを変更した場合など、これまでの学習データ（進度・メモ・出題除外）をもう一度まとめて送信し直したいときに使います。端末側の学習データは削除されません。設定すると、次に国試学習・〇×問題集アプリのいずれかを開いた時に自動で全件送信されます。</div>
-    <div class="backup-btns">
-      <button class="btn-backup" onclick="forceResync()">🔄 次回起動時に全データを再送信</button>
-    </div>
-  </div>
-
   <div class="backup-box" id="resetBox">
     <div class="backup-title">学習データのリセット</div>
     <div class="backup-note">国試学習・〇×問題集アプリの学習履歴（進度・メモ・出題除外・本試験セッション・設定・未送信の送信待ちデータ）と、上の個人ID（学生番号）をすべて削除します。学生番号を入力し直したい場合はここからリセットしてください。<b>この操作は取り消せません。</b>必要ならリセット前に「全データをバックアップ」で保存してください。</div>
@@ -440,30 +432,6 @@ function idbClearStore(dbName, storeName){
     };
     r.onerror = ()=>resolve();
   });
-}
-
-function idbDeleteKey(dbName, storeName, key){
-  return new Promise((resolve)=>{
-    const r = indexedDB.open(dbName);
-    r.onsuccess = ()=>{
-      const db = r.result;
-      if(!db.objectStoreNames.contains(storeName)){ db.close(); resolve(); return; }
-      const tx = db.transaction(storeName, 'readwrite');
-      tx.objectStore(storeName).delete(key);
-      tx.oncomplete = ()=>{ db.close(); resolve(); };
-      tx.onerror = ()=>{ db.close(); resolve(); };
-    };
-    r.onerror = ()=>resolve();
-  });
-}
-
-async function forceResync(){
-  if(!confirm('次に国試学習・〇×問題集アプリを開いた時、これまでの学習データを丸ごと再送信します。\n学習データ自体は削除されません。よろしいですか？')) return;
-  await Promise.all([
-    idbDeleteKey('StudyAppDB', 'settings', 'syncInitialDone'),
-    idbDeleteKey('MarubatsuDB', 'meta', 'syncInitialDone'),
-  ]);
-  showToast('設定しました。次にアプリを開くと自動で全データが再送信されます。');
 }
 
 async function resetStudyData(){

@@ -685,7 +685,6 @@ async function loadData(){
   buildFilters();
   refreshHome();
   flushSyncQueue(); // 前回送りきれなかった学習データがあれば再送を試みる
-  isInitialSyncDone().then(done => { if (!done) syncFullData(); }); // ホーム画面で「強制再送信」された場合、起動時に自動で全件送信
 }
 
 // 自動のオンライン確認は行わない（データは取り込み済み・オフラインで動作）。
