@@ -419,18 +419,56 @@ function saveStudentInfo(){
   }catch(e){ showToast('保存に失敗しました'); }
 }
 
-function idbClearStore(dbName, storeName){
+/* 開いているアプリ(iframe)を完全に破棄する。
+   closeApp() は iframe を非表示にするだけで中のアプリは生きたままのため、
+   これをやらないと以下の理由で「消したはずのデータが復活」してしまう:
+    ・アプリがメモリ上に持つ state.progress / memos / mutedQuestions が残り、
+      次に1問解いた瞬間に古い値がそのままIndexedDBへ書き戻される
+    ・送信中(await fetch)の flushSyncQueue が、あとから送信待ちキューを書き戻す
+    ・アプリがDB接続を握ったままだと deleteDatabase がブロックされる
+   src を about:blank にすると iframe の文書ごと破棄され、上記がすべて止まる。 */
+function unloadAppFrame(){
+  try{
+    if(frame){ frame.onload = null; frame.src = 'about:blank'; }
+    currentApp = null;
+  }catch(e){}
+}
+
+/* DBごと削除する。開いている接続が残っているとblockedになるので、
+   先に unloadAppFrame() を呼んでから使うこと。ダメだった場合は false を返す。 */
+function idbDeleteDatabase(dbName, timeoutMs){
   return new Promise((resolve)=>{
-    const r = indexedDB.open(dbName);
-    r.onsuccess = ()=>{
-      const db = r.result;
-      if(!db.objectStoreNames.contains(storeName)){ db.close(); resolve(); return; }
-      const tx = db.transaction(storeName, 'readwrite');
-      tx.objectStore(storeName).clear();
-      tx.oncomplete = ()=>{ db.close(); resolve(); };
-      tx.onerror = ()=>{ db.close(); resolve(); };
+    let settled = false;
+    const finish = (ok)=>{ if(!settled){ settled = true; resolve(ok); } };
+    let req;
+    try{ req = indexedDB.deleteDatabase(dbName); }catch(e){ finish(false); return; }
+    req.onsuccess = ()=>finish(true);
+    req.onerror   = ()=>finish(false);
+    req.onblocked = ()=>{}; // 別タブ等が接続を握っている → 下のタイムアウトでフォールバックへ
+    setTimeout(()=>finish(false), timeoutMs || 3000);
+  });
+}
+
+/* フォールバック：DB内の全ストアを空にする。
+   ストア名はDBから取得するので、将来ストアが増えても消し漏れない。 */
+function idbClearAllStores(dbName){
+  return new Promise((resolve)=>{
+    let req;
+    try{ req = indexedDB.open(dbName); }catch(e){ resolve(); return; }
+    req.onsuccess = ()=>{
+      const db = req.result;
+      const names = Array.prototype.slice.call(db.objectStoreNames);
+      if(names.length === 0){ db.close(); resolve(); return; }
+      try{
+        const tx = db.transaction(names, 'readwrite');
+        names.forEach(n => tx.objectStore(n).clear());
+        tx.oncomplete = ()=>{ db.close(); resolve(); };
+        tx.onerror    = ()=>{ db.close(); resolve(); };
+        tx.onabort    = ()=>{ db.close(); resolve(); };
+      }catch(e){ db.close(); resolve(); }
     };
-    r.onerror = ()=>resolve();
+    req.onerror   = ()=>resolve();
+    req.onblocked = ()=>resolve();
   });
 }
 
@@ -438,17 +476,24 @@ async function resetStudyData(){
   const typed = prompt('国試学習・〇×問題集の学習データと個人ID（学生番号含む）をすべて削除します。\nこの操作は取り消せません。続行するには「リセット」と入力してください。');
   if(typed !== 'リセット'){ showToast('キャンセルしました'); return; }
 
-  await Promise.all([
-    idbClearStore('StudyAppDB', 'progress'),
-    idbClearStore('StudyAppDB', 'memos'),
-    idbClearStore('StudyAppDB', 'mutedQuestions'),
-    idbClearStore('StudyAppDB', 'paperSessions'),
-    idbClearStore('StudyAppDB', 'settings'),   // 送信初回フラグ・出題設定も含めて初期化
-    idbClearStore('MarubatsuDB', 'progress'),
-    idbClearStore('MarubatsuDB', 'meta'),      // 送信初回フラグ・除外年度設定も含めて初期化
-  ]);
+  // ① 先にアプリ(iframe)を破棄する。これより後に書き戻しが発生しないようにするため、
+  //    localStorage・IndexedDB を触るより前に行うことが重要。
+  unloadAppFrame();
+  await new Promise(r => setTimeout(r, 200)); // 文書の破棄・DB接続の解放を待つ
 
+  // ② 送信待ちキューと個人IDを削除
+  //    （キューはlocalStorageのみに保持。iframeを破棄済みなので書き戻される心配はない）
   try{ localStorage.removeItem(STUDENT_INFO_KEY); }catch(e){}
+  try{ localStorage.removeItem('sync_queue_kokushi'); }catch(e){}     // index-4 の SYNC_QUEUE_KEY と一致
+  try{ localStorage.removeItem('sync_queue_marubatsu'); }catch(e){}   // index-5 の SYNC_QUEUE_KEY と一致
+
+  // ③ 学習データ本体（IndexedDB）を削除。DBごと消し、ブロックされたら全ストアclearへ。
+  for(const dbName of ['StudyAppDB', 'MarubatsuDB']){
+    const ok = await idbDeleteDatabase(dbName, 3000);
+    if(!ok) await idbClearAllStores(dbName);
+  }
+
+  // ④ 念のため、②の後に書き戻された分がないか確認して消す
   try{ localStorage.removeItem('sync_queue_kokushi'); }catch(e){}
   try{ localStorage.removeItem('sync_queue_marubatsu'); }catch(e){}
 

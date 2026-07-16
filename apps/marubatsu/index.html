@@ -599,13 +599,28 @@ function enqueueSync(payload) {
     app: SYNC_APP_ID,
     studentNo: student.studentNo,
     deviceId: student.deviceId,
-    sentAt: new Date().toISOString()
+    sentAt: new Date().toISOString(),
+    _id: Date.now() + '-' + Math.random().toString(36).slice(2) // キュー内の識別用（送信時に外す）
   }, payload);
   const q = loadSyncQueue();
   q.push(record);
   saveSyncQueue(q);
   flushSyncQueue();
   return true; // localStorageのキューに積めた＝いずれ必ず送られる
+}
+
+// 送信できたレコードだけをキューから取り除く。
+// メモリ上の配列をそのまま書き戻すと、送信中(await fetch)に
+// ホーム画面の「学習データをリセット」でキューが消された場合に、
+// 消したはずの送信待ちデータが復活してしまう。必ず最新の状態を読み直して取り除く。
+function removeFromSyncQueue(rec) {
+  const cur = loadSyncQueue();
+  let idx = -1;
+  if (rec && rec._id) idx = cur.findIndex(r => r && r._id === rec._id);
+  else if (cur.length > 0) idx = 0; // _idを持たない旧データ用のフォールバック
+  if (idx >= 0) cur.splice(idx, 1);
+  saveSyncQueue(cur);
+  return cur; // 送信中に増えた分も含む最新のキュー
 }
 
 let _flushingSyncQueue = false;
@@ -622,13 +637,14 @@ async function flushSyncQueue() {
     while (q.length > 0) {
       const rec = q[0];
       try {
+        const body = Object.assign({}, rec);
+        delete body._id; // キュー内部の識別用IDはシートへ送らない
         await fetch(SYNC_ENDPOINT, {
           method: 'POST', mode: 'no-cors', keepalive: true,
-          headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(rec)
+          headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body)
         });
         if (rec.type === 'full') await markInitialSyncDone();
-        q.shift();
-        saveSyncQueue(q);
+        q = removeFromSyncQueue(rec);
       } catch (e) {
         break;
       }
