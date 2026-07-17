@@ -568,16 +568,27 @@ function getOrCreateDeviceId() {
   } catch (e) { return 'unknown-device'; }
 }
 
+// 学生番号は全角で入力される場合があるため半角へ揃える（統合ホーム側と同じ処理）。
+// シートは「学校名＋学生番号」で個人を判別するため、表記ゆれがあると別人になってしまう。
+function normalizeStudentNo(v) {
+  return String(v == null ? '' : v)
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .replace(/[－‐―−]/g, '-')
+    .replace(/[\s　]/g, '')
+    .trim();
+}
+
 function getStudentInfo() {
-  let studentNo = '';
+  let studentNo = '', school = '';
   try {
     const raw = localStorage.getItem('suite_student_info');
     if (raw) {
       const o = JSON.parse(raw);
-      studentNo = o.studentNo || '';
+      studentNo = normalizeStudentNo(o.studentNo);
+      school = (o.school || '').trim();
     }
   } catch (e) {}
-  return { studentNo, deviceId: getOrCreateDeviceId() };
+  return { school, studentNo, deviceId: getOrCreateDeviceId() };
 }
 
 async function isInitialSyncDone() {
@@ -609,6 +620,7 @@ function enqueueSync(payload) {
   const student = getStudentInfo();
   const record = Object.assign({
     app: SYNC_APP_ID,
+    school: student.school,
     studentNo: student.studentNo,
     deviceId: student.deviceId,
     sentAt: new Date().toISOString(),

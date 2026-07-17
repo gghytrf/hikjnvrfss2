@@ -293,11 +293,14 @@
 
   <div class="backup-box" id="studentIdBox">
     <div class="backup-title">個人ID設定（データ分析用）</div>
-    <div class="backup-note">学生番号を入力すると、国試学習・〇×問題集アプリの学習データ送信時に個人を識別するIDとして使われます（分析目的、端末IDと組み合わせて識別します）。未入力でも各アプリは通常どおり使えます。学生番号は一度保存すると変更できなくなります（下部の「学習データをリセット」で再設定可能）。</div>
+    <div class="backup-note">学校と学生番号は、国試学習・〇×問題集アプリの学習データ送信時に個人を識別するIDとして使われます（分析目的）。<b>各アプリを開くには設定が必要です。</b>成績表が不要な場合は、学生番号の代わりに<b>誕生日4桁</b>（例：8月10日 → <b>0810</b>）でも登録できます。<br>
+    一度保存すると変更できません（下部の「学習データをリセット」で再設定できます）。ただし<b>あとから学生番号に変更しても、それ以前の日ごとの記録・時期の比較は成績表に反映されません</b>（変更後に送られるのは各問題の最終的な結果のみのため）。累計の正答率・科目別の成績は引き継げます。<br>
+    学生番号が全角で入力された場合は半角へ自動変換されます。</div>
     <div class="backup-btns" style="flex-wrap:wrap">
-      <input type="text" id="studentNo" placeholder="学生番号" style="flex:1;min-width:120px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;font-size:calc(13px*var(--fs));background:#fff">
+      <select id="schoolSelect" style="flex:1;min-width:180px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;font-size:calc(13px*var(--fs));background:#fff"></select>
+      <input type="text" id="studentNo" placeholder="学生番号" inputmode="numeric" style="flex:1;min-width:120px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;font-size:calc(13px*var(--fs));background:#fff">
     </div>
-    <div class="backup-note" id="studentNoLockNote" style="display:none;margin-top:6px;color:var(--cinnabar,#b4442e)">🔒 学生番号は設定済みのため変更できません。</div>
+    <div class="backup-note" id="studentNoLockNote" style="display:none;margin-top:6px;color:var(--cinnabar,#b4442e)">🔒 学校・学生番号は設定済みのため変更できません。</div>
     <div class="backup-btns" style="margin-top:8px">
       <button class="btn-backup" id="studentIdSaveBtn" onclick="saveStudentInfo()">💾 保存</button>
     </div>
@@ -341,11 +344,30 @@
 
 <div id="toast"></div>
 
+<div id="backupPromptOverlay" style="display:none;position:fixed;inset:0;background:rgba(26,24,20,.55);z-index:10000;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#fffdf8;border-radius:16px;padding:24px;max-width:380px;width:100%;box-shadow:0 8px 30px rgba(0,0,0,.3)">
+    <div style="font-family:'Shippori Mincho',serif;font-weight:700;font-size:16px;color:var(--indigo);margin-bottom:10px">バックアップはありますか？</div>
+    <div style="font-size:12.5px;color:#7a6c50;line-height:1.7;margin-bottom:14px">
+      機種変更前やリセット前に保存したバックアップファイルがあれば、<b>アプリを起動する前にここで読み込んでください</b>。<br>
+      アプリを起動したあとに読み込むと、復元した学習データが集計へ正しく反映されません。
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button onclick="backupPromptRestore()" style="border:1px solid var(--indigo);background:var(--indigo);color:#fff;padding:11px;border-radius:9px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">📥 バックアップを読み込む</button>
+      <button onclick="backupPromptSkip()" style="border:1px solid var(--line);background:#fff;color:var(--indigo);padding:11px;border-radius:9px;font:inherit;font-size:13px;cursor:pointer">バックアップはない（このまま進む）</button>
+    </div>
+  </div>
+</div>
+
 <div id="studentGateOverlay" style="display:none;position:fixed;inset:0;background:rgba(26,24,20,.55);z-index:9999;align-items:center;justify-content:center;padding:20px">
   <div style="background:#fffdf8;border-radius:16px;padding:24px;max-width:360px;width:100%;box-shadow:0 8px 30px rgba(0,0,0,.3)">
     <div style="font-family:'Shippori Mincho',serif;font-weight:700;font-size:16px;color:var(--indigo);margin-bottom:10px">学生番号の設定が必要です</div>
-    <div style="font-size:12.5px;color:#7a6c50;line-height:1.7;margin-bottom:14px">各アプリを利用するには、先に学生番号を設定してください（学習データの分析に使用します）。一度設定すると、学習データをリセットするまで変更できません。</div>
-    <input type="text" id="gateStudentNo" placeholder="学生番号" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;font-size:14px;margin-bottom:12px;box-sizing:border-box">
+    <div style="font-size:12.5px;color:#7a6c50;line-height:1.7;margin-bottom:14px">
+      各アプリを利用するには、先に学校と学生番号を設定してください（学習データの分析に使用します）。<br>
+      <b>成績表が不要な場合は、学生番号の代わりに誕生日4桁（例：8月10日 → 0810）でも登録できます。</b><br>
+      一度設定すると、学習データをリセットするまで変更できません。あとから学生番号に変更しても、それ以前の日ごとの記録は成績表に反映されません。
+    </div>
+    <select id="gateSchool" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;font-size:14px;margin-bottom:10px;box-sizing:border-box"></select>
+    <input type="text" id="gateStudentNo" placeholder="学生番号" inputmode="numeric" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;font-size:14px;margin-bottom:12px;box-sizing:border-box">
     <div style="display:flex;gap:8px">
       <button onclick="cancelStudentGate()" style="flex:1;border:1px solid var(--line);background:#fff;color:var(--indigo);padding:10px;border-radius:9px;font:inherit;font-size:13px;cursor:pointer">キャンセル</button>
       <button onclick="confirmStudentGate()" style="flex:1;border:1px solid var(--indigo);background:var(--indigo);color:#fff;padding:10px;border-radius:9px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">設定して進む</button>
@@ -393,29 +415,61 @@ function getOrCreateDeviceId(){
    国試学習・〇×問題集アプリ（同一オリジンのiframe内）が localStorage を共有して読み取り、
    GASへの学習データ送信時に個人IDとして利用する（端末IDと組み合わせて識別）。 */
 const STUDENT_INFO_KEY = 'suite_student_info';
+
+// 学校の選択肢。増やす場合はここに追記する（空欄は設けない）。
+const SCHOOLS = ['大阪行岡医療専門学校長柄校'];
+
+// 学生番号は全角で入力されることがあるため半角へ揃える。
+// シート側は「学校名＋学生番号」で個人を判別するので、表記ゆれがあると別人になってしまう。
+function normalizeStudentNo(v){
+  return String(v == null ? '' : v)
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)) // 全角英数→半角
+    .replace(/[－‐―−]/g, '-')   // 全角・記号ハイフン類→半角ハイフン
+    .replace(/[\s　]/g, '')      // 空白（半角・全角）は除去
+    .trim();
+}
+
 function loadStudentInfo(){
   try{
-    return JSON.parse(localStorage.getItem(STUDENT_INFO_KEY)||'null') || {studentNo:''};
-  }catch(e){ return {studentNo:''}; }
+    const o = JSON.parse(localStorage.getItem(STUDENT_INFO_KEY)||'null') || {};
+    return { school: o.school || '', studentNo: o.studentNo || '' };
+  }catch(e){ return {school:'', studentNo:''}; }
 }
-function applyStudentNoLock(studentNo){
+
+function fillSchoolSelect(el, selected){
+  if(!el) return;
+  el.innerHTML = SCHOOLS.map(n => '<option value="'+n+'">'+n+'</option>').join('');
+  el.value = (selected && SCHOOLS.indexOf(selected) !== -1) ? selected : SCHOOLS[0];
+}
+
+// 学校・学生番号は一度保存したら変更不可（リセットで解除）
+function applyStudentInfoLock(info){
+  const locked = !!(info && info.studentNo && info.studentNo.trim());
   const ne = document.getElementById('studentNo');
+  const se = document.getElementById('schoolSelect');
+  const btn = document.getElementById('studentIdSaveBtn');
   const note = document.getElementById('studentNoLockNote');
-  const locked = !!(studentNo && studentNo.trim());
   if(ne) ne.disabled = locked;
+  if(se) se.disabled = locked;
+  if(btn) btn.disabled = locked;
   if(note) note.style.display = locked ? 'block' : 'none';
 }
+
 function saveStudentInfo(){
-  const noEl = document.getElementById('studentNo');
-  const studentNo = (noEl.value||'').trim();
   const prev = loadStudentInfo();
-  // 学生番号は一度保存されたら変更不可（リセットするまで既存値を維持）
-  const finalNo = (prev.studentNo && prev.studentNo.trim()) ? prev.studentNo : studentNo;
+  if(prev.studentNo && prev.studentNo.trim()){ showToast('設定済みのため変更できません'); return; }
+  const noEl = document.getElementById('studentNo');
+  const seEl = document.getElementById('schoolSelect');
+  const studentNo = normalizeStudentNo(noEl.value);
+  const school = (seEl && seEl.value) || SCHOOLS[0];
+  if(!studentNo){ showToast('学生番号を入力してください'); return; }
   try{
-    localStorage.setItem(STUDENT_INFO_KEY, JSON.stringify({studentNo: finalNo}));
-    noEl.value = finalNo;
-    applyStudentNoLock(finalNo);
+    localStorage.setItem(STUDENT_INFO_KEY, JSON.stringify({school: school, studentNo: studentNo}));
+    noEl.value = studentNo; // 全角で入力された場合は半角に置き換わったことが見えるようにする
+    applyStudentInfoLock({school, studentNo});
     showToast('個人IDを保存しました');
+    // 初回設定の直後だけ、バックアップの読み込みを促す
+    showBackupPrompt(null);
   }catch(e){ showToast('保存に失敗しました'); }
 }
 
@@ -523,7 +577,8 @@ function clearLocalStudyKeys(){
 function clearStudentNoUI(){
   const ne = document.getElementById('studentNo');
   if(ne){ ne.value = ''; }
-  applyStudentNoLock('');
+  fillSchoolSelect(document.getElementById('schoolSelect'), '');
+  applyStudentInfoLock({school:'', studentNo:''});
 }
 
 async function resetStudyData(){
@@ -570,7 +625,8 @@ async function resetStudyData(){
   const info = loadStudentInfo();
   const ne = document.getElementById('studentNo');
   if(ne) ne.value = info.studentNo;
-  applyStudentNoLock(info.studentNo);
+  fillSchoolSelect(document.getElementById('schoolSelect'), info.school);
+  applyStudentInfoLock(info);
   const did = document.getElementById('deviceIdLabel');
   if(did) did.textContent = '端末ID: ' + getOrCreateDeviceId();
 })();
@@ -604,6 +660,7 @@ function showStudentGate(){
   const el = document.getElementById('studentGateOverlay');
   const input = document.getElementById('gateStudentNo');
   if(input) input.value = '';
+  fillSchoolSelect(document.getElementById('gateSchool'), '');
   if(el) el.style.display = 'flex';
   setTimeout(() => { if(input) input.focus(); }, 50);
 }
@@ -612,16 +669,49 @@ function cancelStudentGate(){
   document.getElementById('studentGateOverlay').style.display = 'none';
 }
 function confirmStudentGate(){
-  const val = (document.getElementById('gateStudentNo').value || '').trim();
+  const val = normalizeStudentNo(document.getElementById('gateStudentNo').value);
+  const seEl = document.getElementById('gateSchool');
+  const school = (seEl && seEl.value) || SCHOOLS[0];
   if(!val){ alert('学生番号を入力してください'); return; }
-  try{ localStorage.setItem(STUDENT_INFO_KEY, JSON.stringify({studentNo: val})); }catch(e){}
+  try{ localStorage.setItem(STUDENT_INFO_KEY, JSON.stringify({school: school, studentNo: val})); }catch(e){}
   const ne = document.getElementById('studentNo');
   if(ne) ne.value = val;
-  applyStudentNoLock(val);
+  fillSchoolSelect(document.getElementById('schoolSelect'), school);
+  applyStudentInfoLock({school, studentNo: val});
   document.getElementById('studentGateOverlay').style.display = 'none';
+
+  // アプリを開く前にバックアップの読み込みを促す。
+  // 先にアプリを起動してしまうと、その時点の（空の）学習データでfull送信が確定し、
+  // あとから復元しても復元分が送信されないため。
   const key = pendingAppKey, fromPop = pendingAppFromPop;
   pendingAppKey = null;
-  if(key) openApp(key, fromPop);
+  showBackupPrompt(() => { if(key) openApp(key, fromPop); });
+}
+
+//=========================================================
+// バックアップ読み込みの確認ポップアップ
+//=========================================================
+let _afterBackupPrompt = null;   // ポップアップを閉じたあとに実行する処理（アプリ起動など）
+let _restoreFromPrompt = false;  // ポップアップ経由の復元かどうか
+
+function showBackupPrompt(next){
+  _afterBackupPrompt = next || null;
+  const el = document.getElementById('backupPromptOverlay');
+  if(el) el.style.display = 'flex';
+}
+function closeBackupPrompt(){
+  const el = document.getElementById('backupPromptOverlay');
+  if(el) el.style.display = 'none';
+  const fn = _afterBackupPrompt;
+  _afterBackupPrompt = null;
+  _restoreFromPrompt = false;
+  if(fn) fn();
+}
+function backupPromptSkip(){ closeBackupPrompt(); }
+function backupPromptRestore(){
+  _restoreFromPrompt = true;
+  document.getElementById('restore-file').click();
+  // ファイル選択がキャンセルされた場合はポップアップを開いたままにする（importAllData側で判定）
 }
 
 function openApp(key, fromPop){
@@ -865,6 +955,39 @@ async function exportAllData(){
   }catch(e){ alert('バックアップに失敗しました: '+e.message); }
 }
 
+/* full送信済みフラグ（syncInitialDone）を消す。
+   復元直後に呼ぶことで、次にアプリを起動したときに復元後の全データがサーバーへ送られる。
+   存在しないDBを作らないよう、onupgradeneeded では中断する（空DBを作るとアプリの起動が阻害されるため）。*/
+function idbDeleteKey(dbName, storeName, key, timeoutMs){
+  return new Promise((resolve)=>{
+    let settled = false, creating = false;
+    const finish = ()=>{ if(!settled){ settled = true; resolve(); } };
+    const timer = setTimeout(finish, timeoutMs || 4000);
+    const done = (db)=>{ try{ if(db) db.close(); }catch(e){} clearTimeout(timer); finish(); };
+    let req;
+    try{ req = indexedDB.open(dbName); }catch(e){ done(null); return; }
+    req.onupgradeneeded = (e)=>{ creating = true; try{ e.target.transaction.abort(); }catch(_){ } };
+    req.onsuccess = ()=>{
+      const db = req.result;
+      if(creating || !db.objectStoreNames.contains(storeName)){ done(db); return; }
+      try{
+        const tx = db.transaction(storeName, 'readwrite');
+        tx.objectStore(storeName).delete(key);
+        tx.oncomplete = ()=>done(db);
+        tx.onerror = ()=>done(db);
+        tx.onabort = ()=>done(db);
+      }catch(e){ done(db); }
+    };
+    req.onerror = ()=>done(null);
+    req.onblocked = ()=>done(null);
+  });
+}
+
+async function clearSyncInitialFlags(){
+  await idbDeleteKey('StudyAppDB', 'settings', 'syncInitialDone');
+  await idbDeleteKey('MarubatsuDB', 'meta', 'syncInitialDone');
+}
+
 function importAllData(ev){
   const file=ev.target.files && ev.target.files[0];
   if(!file) return;
@@ -887,9 +1010,17 @@ function importAllData(ev){
           }catch(e){ /* 対象アプリを一度も開いていないとDBが無い */ }
         }
       }
+      // 復元したデータを集計サーバーへ送り直させるため、full送信済みフラグを消す。
+      // バックアップには StudyAppDB.settings が含まれており、その中の syncInitialDone を
+      // そのまま復元すると「送信済み」と判定され、復元した学習データが一度も送られない。
+      await clearSyncInitialFlags();
+
       showToastHome('バックアップから復元しました');
       alert('復元が完了しました。各アプリを開くと反映されます。');
-    }catch(e){ alert('ファイルの読み込みに失敗しました: '+e.message); }
+      if(_restoreFromPrompt) closeBackupPrompt();
+    }catch(e){
+      alert('ファイルの読み込みに失敗しました: '+e.message);
+    }
     finally{ ev.target.value=''; }
   };
   reader.readAsText(file);
