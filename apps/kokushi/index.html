@@ -1655,13 +1655,16 @@ const EXAM_STRUCTURE = {
 };
 
 // 構成行の問題プールを取得
-function getQuestionsForSection(row, allQuestions, yearFilter, excludeUnsuitable) {
+function getQuestionsForSection(row, allQuestions, examType, yearFilter, excludeUnsuitable) {
   const subjectsToMatch = row.mergedSubjects ? [...row.mergedSubjects] : [row.subject];
   if (row.altNames) subjectsToMatch.push(...row.altNames);
 
+  // 本試験は試験種別ごとに独立した試験。共通科目(AM基礎など)でも、選んだ examType の
+  // 問題だけを使う（はりきゅう第34回に、あマ指第34回の共通科目が混ざらないようにする）。
+  // 専門理論は pool が 'hari_kyu'/'amashi' なので、そちらの examType 一致で自然に絞られる。
   let pool;
   if (row.pool === 'common') {
-    pool = allQuestions.filter(q => subjectsToMatch.includes(q.subject));
+    pool = allQuestions.filter(q => q.examType === examType && subjectsToMatch.includes(q.subject));
   } else {
     pool = allQuestions.filter(q => q.examType === row.pool && subjectsToMatch.includes(q.subject));
   }
@@ -1692,7 +1695,7 @@ function buildExamQuestions(examType, allQuestions, yearFilter, excludeMuted = f
 
   // 本試験は本来不適切問題を含まないので、念のため除外
   for (const row of structure.sections) {
-    let pool = getQuestionsForSection(row, baseQuestions, yearFilter, true);
+    let pool = getQuestionsForSection(row, baseQuestions, examType, yearFilter, true);
     // 出題除外問題を除外（オプション選択時のみ）
     if (excludeMuted) pool = pool.filter(q => !isMutedQuestion(q));
     const needed = row.count;
@@ -1788,7 +1791,7 @@ function goExamSetup() {
   if (originalYears.length === 0) {
     origSelect.innerHTML = '<option value="">本試験専用問題がありません</option>';
   } else {
-    origSelect.innerHTML = '<option value="">すべての本試験専用問題</option>';
+    origSelect.innerHTML = '<option value="">すべての本試験専用問題からランダム出題</option>';
     originalYears.forEach(yr => {
       const opt = document.createElement('option');
       opt.value = yr;
