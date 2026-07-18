@@ -293,22 +293,22 @@ footer a{color:var(--mid)}
   <h1>国試<em>〇×</em>問題集</h1>
   <p class="cover-sub">一問一答＋忘却曲線で定着させる</p>
   <span class="cover-ver">東洋医学 学習スイート 収録アプリ</span>
-  <div class="cover-chips"><div class="chip"><strong>〇×</strong>正誤形式で出題</div><div class="chip"><strong>📚</strong>約18,560問収録</div><div class="chip"><strong>🔄</strong>忘却曲線で復習</div><div class="chip"><strong>📊</strong>進度を記録</div></div>
-  <div class="cover-credits">東洋医学 学習スイート<br>制作者：大阪行岡医療専門学校長柄校　鍼灸科　75期生　藤本</div>
+  <div class="cover-chips"><div class="chip"><strong>〇×</strong>正誤形式で出題</div><div class="chip"><strong>📚</strong>過去問を〇×に分解</div><div class="chip"><strong>🔄</strong>忘却曲線で復習</div><div class="chip"><strong>📊</strong>進度を記録</div></div>
+  <div class="cover-credits">東洋医学 学習スイート<br>制作者：大阪行岡医療専門学校長柄校　鍼灸科　75期生</div>
 </div></div>
-<div class="toc-section"><div class="wrap"><h2>TABLE OF CONTENTS</h2><div class="toc-grid"><a class="toc-item" href="#m1"><span class="toc-num">01</span>このアプリについて</a><a class="toc-item" href="#m2"><span class="toc-num">02</span>3つの学習モード</a><a class="toc-item" href="#m3"><span class="toc-num">03</span>解答画面の使い方</a><a class="toc-item" href="#m4"><span class="toc-num">04</span>忘却曲線（復習スケジュール）</a><a class="toc-item" href="#m5"><span class="toc-num">05</span>成績とデータ管理</a><a class="toc-item" href="#m6"><span class="toc-num">06</span>困ったときは</a></div></div></div>
+<div class="toc-section"><div class="wrap"><h2>TABLE OF CONTENTS</h2><div class="toc-grid"><a class="toc-item" href="#m1"><span class="toc-num">01</span>このアプリについて</a><a class="toc-item" href="#m2"><span class="toc-num">02</span>3つの学習モード</a><a class="toc-item" href="#m3"><span class="toc-num">03</span>解答画面の使い方</a><a class="toc-item" href="#m4"><span class="toc-num">04</span>忘却曲線（復習スケジュール）</a><a class="toc-item" href="#m5"><span class="toc-num">05</span>成績とデータ管理</a><a class="toc-item" href="#m7"><span class="toc-num">06</span>設定画面</a><a class="toc-item" href="#m6"><span class="toc-num">07</span>困ったときは</a></div></div></div>
 <div class="section" id="m1"><div class="wrap">
   <div class="section-header"><div class="sec-num">01</div>
   <div class="section-header-text"><h2>このアプリについて</h2><p>〇×で知識を確認し、忘却曲線で定着</p></div></div>
-  <p class="prose">「国試〇×問題集」は、あん摩マッサージ指圧師・はり師きゅう師の国家試験の四択問題を〇×（正誤）形式に分解した問題集です。第25〜34回の過去問とAI予想を合わせ、約18,560問を収録しています。国試学習アプリと同じ忘却曲線（間隔反復）の仕組みで、解いた問題を最適なタイミングで復習できます。</p><div class="callout callout-info"><div class="ico">🌐</div><div class="body"><h4>オンライン専用・データの扱い</h4><p>このアプリはオンライン専用です。問題データは国試学習アプリと同じ方式で扱い、初回および48時間ごとに最新を取得して端末内（IndexedDB）に保存・再利用します。学習履歴（忘却曲線）も端末内に保存されます。</p></div></div>
+  <p class="prose">「国試〇×問題集」は、あん摩マッサージ指圧師・はり師きゅう師の国家試験の四択問題を、選択肢ごとに〇×（正誤）形式へ分解した一問一答の問題集です。国試学習アプリと同じ忘却曲線（間隔反復）の仕組みで、解いた問題を最適なタイミングで復習できます。1問あたりが短いので、すきま時間の学習に向いています。収録されている年度（回）は、設定画面の「出題しない年度」の一覧で確認できます。</p><div class="callout callout-info"><div class="ico">🌐</div><div class="body"><h4>オンライン専用・データの扱い</h4><p>このアプリはオンライン専用です。問題データは<strong>起動のたびにサーバーから自動で読み込みます</strong>。取り込み操作は不要で、問題データが端末に保存されることもありません。学習履歴（忘却曲線）は端末内（ブラウザ）に保存され、成績表を作るために「学校名＋学生番号」とあわせて制作者のスプレッドシートへ自動送信されます。</p></div></div>
 </div></div><div class="section" id="m2"><div class="wrap">
   <div class="section-header"><div class="sec-num">02</div>
   <div class="section-header-text"><h2>3つの学習モード</h2><p>ホームから選ぶ</p></div></div>
-  <p class="prose">ホーム画面の上部には、総問題数・解答済み・本日の復習対象が表示されます。学習モードは国試学習アプリと同じ3種類です。</p><table class="tbl"><tr><th>モード</th><th>内容</th></tr><tr><td>📅 今日の演習</td><td>全科目から分散し、未出題・復習対象を優先して出題します。問題数（10〜50問）を選んで開始します。</td></tr><tr><td>🔄 復習モード</td><td>忘却曲線に基づき、復習すべき時期になった問題（復習対象）を優先して出題します。</td></tr><tr><td>📚 科目別演習</td><td>科目を選び、その科目を集中的に学習します。</td></tr></table>
+  <p class="prose">ホーム画面の上部には、総問題数・解答済み・復習対象が表示されます。学習モードは国試学習アプリと同じ3種類です。</p><table class="tbl"><tr><th>モード</th><th>内容</th></tr><tr><td>📅 今日の演習</td><td>全科目から分散し、未出題・復習対象を優先して出題します。問題数（10問・20問・30問・50問）を選んで開始します（初期設定は20問）。</td></tr><tr><td>🔄 復習モード</td><td>忘却曲線に基づき、復習すべき時期になった問題（復習対象）を優先して出題します。</td></tr><tr><td>📚 科目別演習</td><td>科目を選び、その科目を集中的に学習します。</td></tr></table>
 </div></div><div class="section" id="m3"><div class="wrap">
   <div class="section-header"><div class="sec-num">03</div>
   <div class="section-header-text"><h2>解答画面の使い方</h2><p>〇か×かを選ぶ</p></div></div>
-  <p class="prose">問題文が正しいと思えば「〇（正しい）」、誤りだと思えば「×（誤り）」を選びます。解答するとすぐに正誤と解説が表示されます。画面上部には進み具合・このセッションの正答率・その問題の忘却曲線レベルが表示されます。</p><div class="callout callout-tip"><div class="ico">💡</div><div class="body"><h4>解説で理解を深める</h4><p>正解・不正解にかかわらず解説が表示されます。間違えた問題は解説を読んで、なぜそうなるのかを確認しましょう。間違えた問題はレベルが0に戻り、すぐに復習対象になります。</p></div></div>
+  <p class="prose">問題文が正しいと思えば「〇（正しい）」、誤りだと思えば「✕（誤り）」を選びます。選んだ瞬間に正誤と解説が表示されます（「解答する」ボタンはありません）。画面上部には進み具合・このセッションの正答率・進捗バーが表示されます。解答後は「次の問題 →」で進み、「終了」でセッションを切り上げられます。</p><div class="callout callout-info"><div class="ico">📊</div><div class="body"><h4>セッション結果</h4><p>出題した問題をすべて解き終える（または「終了」する）と、セッション結果が表示されます。正答率・出題数・正解数・不正解数を確認でき、「同じ条件でもう一度」で続けて演習できます。</p></div></div><div class="callout callout-tip"><div class="ico">💡</div><div class="body"><h4>解説で理解を深める</h4><p>正解・不正解にかかわらず解説が表示されます。間違えた問題は解説を読んで、なぜそうなるのかを確認しましょう。間違えた問題はレベルが0に戻り、すぐに復習対象になります。</p></div></div>
 </div></div><div class="section" id="m4"><div class="wrap">
   <div class="section-header"><div class="sec-num">04</div>
   <div class="section-header-text"><h2>忘却曲線（復習スケジュール）</h2><p>解くほど間隔が広がる</p></div></div>
@@ -316,11 +316,16 @@ footer a{color:var(--mid)}
 </div></div><div class="section" id="m5"><div class="wrap">
   <div class="section-header"><div class="sec-num">05</div>
   <div class="section-header-text"><h2>成績とデータ管理</h2><p>記録の確認と初期化</p></div></div>
-  <p class="prose">下部メニューの「成績」では、解答済み数・習得(レベル4以上)・本日の復習対象に加えて、忘却曲線レベルごとの問題数と科目別の学習進度が見られます。「データ管理」から学習記録（忘却曲線・解答履歴）のリセットができます。</p><div class="callout callout-warn"><div class="ico">🗑️</div><div class="body"><h4>リセットは慎重に</h4><p>学習記録のリセットは、忘却曲線と解答履歴をすべて消去します。元に戻せません。</p></div></div>
-</div></div><div class="section" id="m6"><div class="wrap">
+  <p class="prose">下部メニューの「📊 成績」では、解答済み数・習得(Lv4以上)・本日の復習対象に加えて、「📈 復習の進度」（忘却曲線レベルごとの問題数）と「📚 科目別 学習進度」（科目ごとのレベル別分布）が見られます。学習記録のリセットは「⚙️ 設定」の「学習履歴の管理」から行います。</p><div class="callout callout-warn"><div class="ico">🗑️</div><div class="body"><h4>リセットは慎重に</h4><p>学習記録のリセットは、忘却曲線と解答履歴をすべて消去します。元に戻せません。問題データは保持されます。バックアップ（書き出し・復元）は、統合ホーム画面下部の「学習データのバックアップ」からまとめて行えます。リセット前にバックアップを取っておくと安心です。</p></div></div>
+</div></div><div class="section" id="m7"><div class="wrap">
   <div class="section-header"><div class="sec-num">06</div>
+  <div class="section-header-text"><h2>設定画面</h2><p>下部メニューの「⚙️ 設定」から</p></div></div>
+  <table class="tbl"><tr><th>項目</th><th>内容</th></tr><tr><td>問題データ</td><td>読み込んだ問題データのバージョンが表示されます。起動時に自動で読み込まれるため、取り込み操作は不要です（オンライン接続必須）。</td></tr><tr><td>出題しない年度</td><td>読み込まれている年度（回）の一覧です。チェックした年度の問題は、<strong>今日の演習・科目別演習・復習モードのすべて</strong>で出題されなくなります。まだ習っていない範囲を外したいときなどに使います。</td></tr><tr><td>学習履歴の管理</td><td>学習履歴（忘却曲線・解答履歴）をリセットします。問題データは保持されます。</td></tr></table>
+  <div class="callout callout-tip"><div class="ico">🔤</div><div class="body"><h4>文字サイズ</h4><p>画面上部の「A−／A＋」で、文字サイズを5段階（小・標準・大・特大・最大）に変更できます。設定はこの端末に保存されます。右上の「📖 説明書」から、この説明書をいつでも開けます。</p></div></div>
+</div></div><div class="section" id="m6"><div class="wrap">
+  <div class="section-header"><div class="sec-num">07</div>
   <div class="section-header-text"><h2>困ったときは</h2><p>よくある質問</p></div></div>
-  <p class="prose"><strong>Q. オフラインで使えますか。</strong><br>A. オンライン専用です。起動にはインターネット接続が必要です（取得済みの問題データと学習記録は端末内に保持されます）。</p><p class="prose"><strong>Q. 「今は復習対象の問題がありません」と出る。</strong><br>A. まだ復習の時期になった問題がない状態です。「今日の演習」や「科目別演習」で新しい問題を解くと、復習対象が増えていきます。</p><p class="prose"><strong>Q. 国試学習アプリとの違いは？</strong><br>A. 学習の仕組み（3モード・忘却曲線・成績）は同じです。国試学習アプリは四択、こちらは〇×形式という違いです。併用すると効果的です。</p><p class="prose"><strong>Q. バージョンや更新は？</strong><br>A. バージョン表示・更新は統合ホーム側で自動管理されます。手動操作は不要です。</p>
+  <p class="prose"><strong>Q. オフラインで使えますか。</strong><br>A. オンライン専用です。問題データは起動のたびにサーバーから読み込むため、接続がないと問題を出題できません（学習記録は端末内に保持されます）。</p><p class="prose"><strong>Q. 「今は復習対象の問題がありません」と出る。</strong><br>A. まだ復習の時期になった問題がない状態です。「今日の演習」や「科目別演習」で新しい問題を解くと、復習対象が増えていきます。</p><p class="prose"><strong>Q. 国試学習アプリとの違いは？</strong><br>A. 学習の仕組み（3モード・忘却曲線・成績）は同じです。国試学習アプリは四択、こちらは〇×形式という違いです。学習履歴もそれぞれ別に管理されます。併用すると効果的です。</p><p class="prose"><strong>Q. 問題数が思ったより少ない／多い。</strong><br>A. 設定の「出題しない年度」でチェックを入れた年度は出題対象から外れます。ホームの「総問題数」も確認してみてください。</p><p class="prose"><strong>Q. バージョンや更新は？</strong><br>A. バージョン表示・更新は統合ホーム側で自動管理されます。手動操作は不要です。</p>
 </div></div>
 <footer>東洋医学 学習スイート ／ 国試<em>〇×</em>問題集<br>本アプリは個人学習用途を想定しています。再配布・商用利用は禁止されています。</footer>
 <script>
