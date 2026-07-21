@@ -136,6 +136,24 @@
     font-family:'Zen Kaku Gothic New';margin-top:3px}
   .lead{font-size:calc(13.5px*var(--fs));color:#6a5e48;margin:14px 2px 22px;letter-spacing:.02em}
 
+  /* ===== カタログ案内バナー ===== */
+  .catalog-banner{display:flex;align-items:center;gap:14px;margin:0 2px 20px;padding:14px 16px;
+    background:linear-gradient(135deg,#fff,var(--paper2,#faf6ed));border:1px solid var(--line);
+    border-radius:14px;box-shadow:0 2px 6px rgba(0,0,0,.04)}
+  .catalog-banner .cb-icon{flex:none;width:42px;height:42px;border-radius:10px;display:grid;place-items:center;
+    background:var(--cinnabar);color:#fff;font-family:'Shippori Mincho',serif;font-weight:800;font-size:19px;
+    box-shadow:2px 2px 0 var(--cinnabar-d)}
+  .catalog-banner .cb-text{flex:1;min-width:160px}
+  .catalog-banner .cb-title{font-family:'Shippori Mincho',serif;font-weight:700;font-size:calc(13.5px*var(--fs));color:var(--indigo)}
+  .catalog-banner .cb-sub{margin-top:2px;font-size:calc(11px*var(--fs));color:#8a7d63;line-height:1.55}
+  .catalog-banner .cb-btns{flex:none;display:flex;gap:8px;flex-wrap:wrap}
+  .btn-catalog{border:1px solid var(--indigo);background:var(--indigo);color:#fff;font:inherit;
+    font-size:calc(12.5px*var(--fs));font-weight:700;padding:9px 14px;border-radius:10px;cursor:pointer;white-space:nowrap}
+  .btn-catalog:hover{background:#213a41}
+  .btn-catalog.alt{background:#fff;color:var(--indigo);border-color:var(--line)}
+  .btn-catalog.alt:hover{background:var(--paper2,#faf6ed)}
+  @media (max-width:520px){ .catalog-banner{flex-wrap:wrap} .catalog-banner .cb-btns{width:100%} .catalog-banner .cb-btns button{flex:1} }
+
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   @media (max-width:520px){ .grid{grid-template-columns:1fr} }
 
@@ -249,6 +267,18 @@
     </div>
   </div>
   <p class="lead">学習したいアプリを選んでください。学習履歴・カルテなどはこれまで通り端末内に保存されます。問題・経穴データは毎回サーバーから取得します（オンライン接続が必要です）。</p>
+
+  <div class="catalog-banner">
+    <div class="cb-icon">誌</div>
+    <div class="cb-text">
+      <div class="cb-title">学習スイート カタログ</div>
+      <div class="cb-sub">A版・B版の内容比較、使いはじめかた、ご利用にあたっての注意をまとめています。</div>
+    </div>
+    <div class="cb-btns">
+      <button class="btn-catalog" onclick="window.open('./catalog.html','_blank')">📋 カタログを見る</button>
+      <button class="btn-catalog alt" onclick="window.open('./catalog.pdf','_blank')">📄 PDF版</button>
+    </div>
+  </div>
 
   <div class="grid">
     <button class="card c-kokushi" onclick="openApp('kokushi')">
