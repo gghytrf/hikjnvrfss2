@@ -693,7 +693,8 @@
       </div>
 
       <div class="btn-row" id="action-buttons">
-        <button class="btn full" id="submit-btn" onclick="submitAnswer()" disabled>解答する</button>
+        <button class="btn" id="submit-confident" onclick="submitAnswer('confident')" disabled>自信あり 解答</button>
+        <button class="btn outline" id="submit-unsure" onclick="submitAnswer('unsure')" disabled>あいまい 解答</button>
       </div>
 
       <div class="card" id="memo-card" style="display:none; padding: 12px; margin-top: 12px; margin-bottom: 0; background: #fffbf0;">
@@ -3443,7 +3444,7 @@ function renderStats() {
   }
 
   // 復習レベル分布
-  const intervalLabels = ['未学習(レベル0)', 'レベル1(2日後)', 'レベル2(3日後)', 'レベル3(7日後)', 'レベル4(14日後)', 'レベル5(30日後)'];
+  const intervalLabels = ['未学習(レベル0)', 'レベル1(1日後)', 'レベル2(3日後)', 'レベル3(7日後)', 'レベル4(21日後)', 'レベル5以上(60日〜)'];
   const intervalCounts = [0, 0, 0, 0, 0, 0];
   filtered.forEach(q => {
     const p = state.progress[q.id];
@@ -3578,6 +3579,29 @@ function startMutedMode() {
   showQuestion();
 }
 
+// 連続正解時の復習間隔(日)。末尾を長くして習得済み問題が頻繁に戻らないようにする
+// レベル1→1日, 2→3日, 3→7日, 4→21日, 5→60日, 6→150日, 7→365日
+const INTERVALS = [1, 3, 7, 21, 60, 150, 365];
+
+// 間隔に±15%のゆらぎを与え、同じ日に復習が集中する「なだれ」を防ぐ
+function fuzz(days) {
+  if (days <= 0) return days;
+  return Math.max(1, Math.round(days * (0.85 + Math.random() * 0.30)));
+}
+
+// 復習キューの優先度スコア（大きいほど先に出題）
+// 危険な思い込み(danger) > 期限超過が大きい > レベルが低い(忘れやすい)、を頻出度(weight)で重み付け
+function reviewPriority(q, todayD) {
+  const p = state.progress[q.id];
+  if (!p) return -Infinity;
+  const danger = p.danger ? 1000 : 0;
+  const dueD = p.nextReviewAt ? new Date(p.nextReviewAt) : todayD;
+  const overdue = Math.max(0, Math.round((todayD - dueD) / 86400000)); // 超過日数
+  const fragile = INTERVALS.length - Math.min(p.intervalLevel || 0, INTERVALS.length);
+  const importance = q.weight || 1; // 頻出・傾向問題に付与予定（未指定は1）
+  return (danger + overdue * 3 + fragile) * importance;
+}
+
 function startMode(mode, subject) {
   state.currentMode = mode;
   state.currentSubject = subject;
@@ -3596,8 +3620,9 @@ function startMode(mode, subject) {
       showToast('復習対象の問題はありません');
       return;
     }
-    // 復習はシャッフル
-    queue = shuffleArray([...queue]);
+    // 復習は優先度順（危険→期限超過→忘れやすい→頻出度）で並べる
+    const todayD = new Date();
+    queue = [...queue].sort((a, b) => reviewPriority(b, todayD) - reviewPriority(a, todayD));
   } else if (mode === 'subject') {
     // subjectEnabled=true の問題のみ対象
     queue = queue.filter(q => q.subject === subject && q.subjectEnabled);
@@ -3729,7 +3754,8 @@ function showQuestion() {
   document.getElementById('answer-area').classList.remove('show');
   document.getElementById('memo-card').style.display = 'none';
   document.getElementById('action-buttons').style.display = 'flex';
-  document.getElementById('submit-btn').disabled = true;
+  document.getElementById('submit-confident').disabled = true;
+  document.getElementById('submit-unsure').disabled = true;
   document.getElementById('next-btn').style.display = 'none';
   document.getElementById('mute-btn').style.display = 'none';
   document.getElementById('back-to-list-btn').style.display = 'none';
@@ -3802,15 +3828,22 @@ function selectChoice(div, origNum) {
   document.querySelectorAll('.choice').forEach(c => c.classList.remove('selected'));
   div.classList.add('selected');
   state.selectedChoice = origNum;
-  document.getElementById('submit-btn').disabled = false;
+  document.getElementById('submit-confident').disabled = false;
+  document.getElementById('submit-unsure').disabled = false;
 }
 
-function submitAnswer() {
+function submitAnswer(confidence) {
   if (state.selectedChoice === null) return;
   state.isAnswered = true;
 
   const q = state.currentQuestion;
   const isCorrect = q.correctAnswers.includes(state.selectedChoice);
+  // 自信度×正誤 → グレード（easy / good / again / trap）
+  // confidence が未指定（旧呼び出し）の場合は 'unsure' 相当で扱う
+  const conf = confidence === 'confident' ? 'confident' : 'unsure';
+  const grade = conf === 'confident'
+    ? (isCorrect ? 'easy' : 'trap')    // 自信あり×不正解＝危険な思い込み
+    : (isCorrect ? 'good' : 'again');  // あいまい×正解＝据え置き
 
   // 選択肢の表示更新
   document.querySelectorAll('.choice').forEach(c => {
@@ -3824,10 +3857,10 @@ function submitAnswer() {
   banner.style.display = 'block';
   if (isCorrect) {
     banner.className = 'result-banner correct';
-    banner.textContent = '◯ 正解!';
+    banner.textContent = grade === 'easy' ? '◯ 正解!（自信あり）' : '◯ 正解';
   } else {
     banner.className = 'result-banner incorrect';
-    banner.textContent = '✗ 不正解';
+    banner.textContent = grade === 'trap' ? '✗ 不正解 ⚠️ 自信あり→最優先で復習' : '✗ 不正解';
   }
 
   // 解説表示
@@ -3850,7 +3883,7 @@ function submitAnswer() {
   // 進捗保存(忘却曲線)
   // skipProgressSave=trueの場合(AI作成問題の間違い直しなど)は保存しない
   if (!state.skipProgressSave) {
-    saveProgress(q.id, isCorrect).then(() => syncOneAnswer(q.id));
+    saveProgress(q.id, grade).then(() => syncOneAnswer(q.id));
   }
 }
 
@@ -3896,36 +3929,65 @@ function skipAnswer() {
   }
 }
 
-async function saveProgress(qid, isCorrect, isSkipped = false) {
+// grade: 'easy'(自信あり正解) 'good'(あいまい正解) 'again'(不正解) 'trap'(自信あり不正解=危険)
+// 後方互換: 本試験モード等から isCorrect(真偽値)/スキップで呼ばれた場合はグレードに変換する
+async function saveProgress(qid, grade, isSkipped = false) {
+  if (grade === true) grade = 'good';        // 本試験モードの正解（自信度なし→good）
+  else if (grade === false) grade = 'again'; // 本試験モードの不正解
+  if (isSkipped) grade = 'again';            // スキップは不正解扱い
+
   const today = new Date();
   const cur = state.progress[qid] || {
     questionId: qid,
     correctCount: 0,
     incorrectCount: 0,
     intervalLevel: 0,
+    danger: false,
     lastResult: null,
     lastAnsweredAt: null,
     nextReviewAt: null
   };
 
   cur.lastAnsweredAt = today.toISOString();
-  cur.lastResult = isSkipped ? 'skipped' : (isCorrect ? 'correct' : 'incorrect');
+  // 旧来の集計との互換のため lastResult は correct/incorrect/skipped のまま残し、
+  // 自信度込みの詳細は lastGrade に持たせる
+  cur.lastResult = isSkipped ? 'skipped'
+    : ((grade === 'easy' || grade === 'good') ? 'correct' : 'incorrect');
+  cur.lastGrade = grade;
 
-  const intervals = [2, 3, 7, 14, 30]; // 連続正解時の日数(レベル1→2日,2→3日,3→7日,4→14日,5→30日)
-  if (isCorrect) {
-    cur.correctCount++;
-    cur.intervalLevel = Math.min(cur.intervalLevel + 1, intervals.length);
-    const days = intervals[cur.intervalLevel - 1];
-    const next = new Date(today);
-    next.setDate(next.getDate() + days);
-    cur.nextReviewAt = next.toISOString().slice(0, 10);
-  } else {
-    cur.incorrectCount++;
-    cur.intervalLevel = 0;
-    const next = new Date(today);
-    // レベル0(初回不正解)は当日中に再出題 → nextReviewAt = 今日
-    cur.nextReviewAt = next.toISOString().slice(0, 10);
+  let nextDays;
+  switch (grade) {
+    case 'easy': // 自信あり正解 → 2段跳ばしで伸ばす・危険フラグ解除
+      cur.correctCount++;
+      cur.intervalLevel = Math.min(cur.intervalLevel + 2, INTERVALS.length);
+      cur.danger = false;
+      nextDays = fuzz(INTERVALS[cur.intervalLevel - 1]);
+      break;
+    case 'good': // あいまい正解 → 1段だけ伸ばす
+      cur.correctCount++;
+      cur.intervalLevel = Math.min(cur.intervalLevel + 1, INTERVALS.length);
+      nextDays = fuzz(INTERVALS[cur.intervalLevel - 1]);
+      break;
+    case 'again': // 不正解 → 1段下げて当日中に再出題
+      cur.incorrectCount++;
+      cur.intervalLevel = Math.max(0, cur.intervalLevel - 1);
+      nextDays = 0;
+      break;
+    case 'trap': // 自信あり不正解 → レベル0リセット＋危険フラグ・当日再出題
+      cur.incorrectCount++;
+      cur.intervalLevel = 0;
+      cur.danger = true;
+      nextDays = 0;
+      break;
+    default:
+      cur.correctCount++;
+      cur.intervalLevel = Math.min(cur.intervalLevel + 1, INTERVALS.length);
+      nextDays = fuzz(INTERVALS[cur.intervalLevel - 1]);
   }
+
+  const next = new Date(today);
+  next.setDate(next.getDate() + nextDays);
+  cur.nextReviewAt = next.toISOString().slice(0, 10);
 
   state.progress[qid] = cur;
   await dbPut('progress', cur);
