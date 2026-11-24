@@ -147,7 +147,7 @@
   .answer-area { display: none; padding: 16px; background: #fafbfc; border-radius: 10px; margin-bottom: 12px; border-left: 4px solid #2c5f7c; }
   .answer-area.show { display: block; }
   .answer-area h3 { font-size: calc(13px * var(--fs)); color: #2c5f7c; margin-bottom: 6px; font-weight: 600; }
-  .answer-area .content { font-size: calc(14px * var(--fs)); color: #4a5a6a; min-height: 24px; }
+  .answer-area .content { font-size: calc(14px * var(--fs)); color: #4a5a6a; min-height: 24px; white-space: pre-line; } /* 解説文中の改行(\n)をそのまま表示 */
   .answer-area .empty { color: #aab5bf; font-style: italic; }
 
   textarea { width: 100%; padding: 10px; border: 1.5px solid #d4dde4; border-radius: 8px; font-family: inherit; font-size: calc(14px * var(--fs)); resize: vertical; min-height: 60px; }
@@ -185,6 +185,7 @@
   .slider:before { position: absolute; content: ""; height: 22px; width: 22px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.2s; }
   input:checked + .slider { background: #2c5f7c; }
   input:checked + .slider:before { transform: translateX(22px); }
+  input:disabled + .slider { opacity: .45; cursor: not-allowed; }
 
   select { padding: 8px 12px; border: 1.5px solid #d4dde4; border-radius: 8px; font-size: calc(14px * var(--fs)); background: white; }
 
@@ -273,6 +274,25 @@
     background: #fff176; color: inherit; border-radius: 2px; padding: 0 1px;
   }
 
+  /* 検索画面：入力欄・案内 */
+  .search-note {
+    font-size: calc(13px * var(--fs)); color: #2c5f7c; background: #e3f0f7;
+    border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; line-height: 1.7;
+  }
+  .search-field-label { display: block; font-size: 12px; font-weight: 600; color: #4a5a6a; margin: 0 0 6px; }
+  .search-field {
+    width: 100%; box-sizing: border-box; padding: 12px 14px; border: 2px solid #d4dde4;
+    border-radius: 10px; font-size: 15px; font-family: inherit; outline: none;
+    transition: border-color 0.15s; background: white;
+  }
+  .search-field:focus { border-color: #2c5f7c; }
+  /* 検索結果：除外されている問題のマーク */
+  .search-result-card.excluded { background: #fffaf0; border-left-color: #e0a030; }
+  .search-ex-tag {
+    font-size: 11px; background: #ffc107; color: #212529; padding: 2px 8px;
+    border-radius: 10px; font-weight: 600;
+  }
+
   /* 紙試験結果入力 */
   .paper-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
   .paper-cell { display: flex; flex-direction: column; align-items: center; padding: 4px; border: 1px solid #d4dde4; border-radius: 6px; background: white; }
@@ -342,6 +362,11 @@
 
     </div>
 
+    <div style="display:flex;align-items:center;gap:10px;margin:0 0 12px;">
+      <button class="btn outline" id="sync-btn" onclick="runSync('button')" style="padding:8px 14px;font-size:13px;white-space:nowrap;">🔄 同期</button>
+      <div id="sync-status" style="font-size:12px;color:#7a8a99;line-height:1.5;flex:1;"></div>
+    </div>
+
     <button class="menu-btn" onclick="goDailySetup()">
       <span class="icon">📅</span><span class="label">今日の演習</span>
       <div class="desc">全科目から分散して未出題優先で出題</div>
@@ -361,7 +386,7 @@
     </button>
     <button class="menu-btn" onclick="goSearch()">
       <span class="icon">🔍</span><span class="label">問題検索</span>
-      <div class="desc">問題文・選択肢からキーワード検索</div>
+      <div class="desc">キーワード・年度・問題番号から検索</div>
     </button>
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 0;">
       <button class="menu-btn" onclick="goMemoList()" style="margin-bottom: 0;">
@@ -373,6 +398,10 @@
         <div class="desc">除外設定した問題</div>
       </button>
     </div>
+    <button class="menu-btn" onclick="openReader()" style="margin-top: 10px;">
+      <span class="icon">📘</span><span class="label">読み物</span>
+      <div class="desc">科目別の学習参考書（解説・重要語句の表）を読む</div>
+    </button>
   </div>
 
   <!-- メモ一覧画面 -->
@@ -402,53 +431,42 @@
     <div class="card">
       <h2>🔍 問題検索</h2>
 
-      <!-- 検索箇所の選択 -->
-      <div style="font-size: 12px; font-weight: 600; color: #4a5a6a; margin-bottom: 6px;">検索箇所</div>
-      <div style="display: flex; gap: 8px; margin-bottom: 14px;">
-        <label style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px; background: #f5f7fa; border: 2px solid #d4dde4; border-radius: 10px; cursor: pointer; font-size: 14px; transition: all 0.15s;" id="search-target-q-label">
-          <input type="radio" name="search-target" value="question" checked id="search-target-q" style="accent-color: #2c5f7c; width: 16px; height: 16px;">
-          問題文から検索
-        </label>
-        <label style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px; background: #f5f7fa; border: 2px solid #d4dde4; border-radius: 10px; cursor: pointer; font-size: 14px; transition: all 0.15s;" id="search-target-c-label">
-          <input type="radio" name="search-target" value="choices" id="search-target-c" style="accent-color: #2c5f7c; width: 16px; height: 16px;">
-          選択肢から検索
-        </label>
+      <!-- 検索範囲の案内（全問題に固定） -->
+      <div class="search-note">
+        📚 取り込まれている全問題（問題文・選択肢）から検索されます（本試験専用問題を除く）。<br>
+        出題除外・除外年度などの問題は、検索結果にマークが表示されます。
       </div>
 
-      <!-- 検索対象と検索範囲の区切り線 -->
-      <div style="border-top: 1px dashed #d4dde4; margin-bottom: 14px;"></div>
+      <!-- 検索キーワード -->
+      <label class="search-field-label" for="search-input">検索キーワード</label>
+      <input type="text" id="search-input" class="search-field"
+        placeholder="検索ワードを入力" style="margin-bottom: 12px;"
+        oninput="onSearchInput(event)">
 
-      <!-- 検索範囲の選択 -->
-      <div style="font-size: 12px; font-weight: 600; color: #4a5a6a; margin-bottom: 6px;">検索範囲</div>
-      <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-        <label style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px; background: #f5f7fa; border: 2px solid #d4dde4; border-radius: 10px; cursor: pointer; font-size: 14px; transition: all 0.15s;" id="search-scope-all-label">
-          <input type="radio" name="search-scope" value="all" id="search-scope-all" style="accent-color: #2c5f7c; width: 16px; height: 16px;">
-          全問題から検索
-        </label>
-        <label style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px; background: #e3f0f7; border: 2px solid #2c5f7c; border-radius: 10px; cursor: pointer; font-size: 14px; transition: all 0.15s; font-weight: 600;" id="search-scope-filtered-label">
-          <input type="radio" name="search-scope" value="filtered" checked id="search-scope-filtered" style="accent-color: #2c5f7c; width: 16px; height: 16px;">
-          出題される問題のみ
-        </label>
+      <!-- 年度・問題番号（数字のみ） -->
+      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+        <div style="flex: 1; min-width: 0;">
+          <label class="search-field-label" for="search-year">年度（数字のみ）</label>
+          <input type="text" id="search-year" class="search-field" inputmode="numeric" pattern="[0-9]*"
+            maxlength="4" placeholder="例：34"
+            oninput="onSearchInput(event)" oncompositionend="sanitizeDigits(this)">
+        </div>
+        <div style="flex: 1; min-width: 0;">
+          <label class="search-field-label" for="search-qno">問題番号（数字のみ）</label>
+          <input type="text" id="search-qno" class="search-field" inputmode="numeric" pattern="[0-9]*"
+            maxlength="3" placeholder="例：15"
+            oninput="onSearchInput(event)" oncompositionend="sanitizeDigits(this)">
+        </div>
       </div>
 
       <!-- 検索ヒント -->
-      <div style="font-size: 12px; color: #7a8a99; background: #f5f7fa; border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; line-height: 1.7;">
+      <div style="font-size: 12px; color: #7a8a99; background: #f5f7fa; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; line-height: 1.7;">
+        キーワード・年度・問題番号のいずれか1つ以上を入力してください（複数入力した場合はすべてに合致する問題を表示）。<br>
         例：<strong style="color: #2c5f7c;">橈骨神経</strong>　または　<strong style="color: #2c5f7c;">橈骨 神経</strong>（スペース区切りでAND検索）<br>
-        全角・半角、大文字・小文字はどちらでもヒットします（<strong>3mmHg</strong> ＝ <strong>３ｍｍＨＧ</strong>）<br>
-        ※ 50件以上ヒットする場合は結果を表示できません。ワードを追加して絞り込んでください。
+        全角・半角、大文字・小文字はどちらでもヒットします（<strong>3mmHg</strong> ＝ <strong>３ｍｍＨＧ</strong>）
       </div>
 
-      <!-- 検索ボックス -->
-      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-        <input type="text" id="search-input"
-          placeholder="検索ワードを入力"
-          style="flex: 1; padding: 12px 14px; border: 2px solid #d4dde4; border-radius: 10px; font-size: 15px; font-family: inherit; outline: none; transition: border-color 0.15s;"
-          oninput="onSearchInput()"
-          onfocus="this.style.borderColor='#2c5f7c'"
-          onblur="this.style.borderColor='#d4dde4'"
-        >
-        <button class="btn" onclick="execSearch()" style="padding: 12px 18px; flex-shrink: 0;">検索</button>
-      </div>
+      <button class="btn" onclick="execSearch()" style="width: 100%; padding: 12px 18px; margin-bottom: 8px;">🔍 検索</button>
 
       <!-- メッセージ/ステータス -->
       <div id="search-status" style="font-size: 13px; color: #7a8a99; text-align: center; padding: 4px 0; min-height: 24px;"></div>
@@ -483,9 +501,21 @@
     </div>
 
     <div class="card">
-      <h2>② 出題方法</h2>
+      <h2>② 出題する科目</h2>
+      <div style="font-size: 12px; color: #4a5a6a; line-height: 1.7; padding: 10px 12px; background: #f5f7fa; border-radius: 6px; margin-bottom: 8px;">
+        未選択の場合は全科目から出題します。選択した科目は記憶され、次回以降も引き継がれます。
+      </div>
+      <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+        <button class="btn outline" style="flex: 1; font-size: 13px; padding: 8px;" onclick="dailySelectAllSubjects(true)">すべて選択</button>
+        <button class="btn outline" style="flex: 1; font-size: 13px; padding: 8px;" onclick="dailySelectAllSubjects(false)">選択解除</button>
+      </div>
+      <div id="daily-subject-list"></div>
+    </div>
+
+    <div class="card">
+      <h2>③ 出題方法</h2>
       <div style="font-size: 12px; color: #4a5a6a; line-height: 1.8; padding: 12px; background: #f5f7fa; border-radius: 6px;">
-        <strong>全科目（不適切問題を含む）から、可能な限り均等に分散して出題</strong>します。<br>
+        <strong>問題数を科目数で割って各科目に均等に配分</strong>します（割り切れない余りは、対象科目からランダムに1問ずつ追加）。<br>
         未出題の問題を優先的に出題し、不足する場合は出題済み問題から復習日が近いものを補充します。<br>
         試験種別フィルター（設定画面）の対象範囲のみが出題対象となります。
       </div>
@@ -500,12 +530,20 @@
       <h2>① 試験種別</h2>
       <div class="exam-option-list" id="exam-type-options">
         <label class="radio-row">
-          <input type="radio" name="exam-type" value="hari_kyu" checked>
+          <input type="radio" name="exam-type" value="hari_kyu" checked onchange="onExamTypeChange()">
           <span>はり師きゅう師(180問・AM90問+PM90問)</span>
         </label>
         <label class="radio-row">
-          <input type="radio" name="exam-type" value="amashi">
+          <input type="radio" name="exam-type" value="hari_kyu_half" onchange="onExamTypeChange()">
+          <span>はり師きゅう師 ハーフテスト(90問・制限時間2時間10分)</span>
+        </label>
+        <label class="radio-row">
+          <input type="radio" name="exam-type" value="amashi" onchange="onExamTypeChange()">
           <span>あマ指(160問・AM80問+PM80問)</span>
+        </label>
+        <label class="radio-row">
+          <input type="radio" name="exam-type" value="amashi_half" onchange="onExamTypeChange()">
+          <span>あマ指 ハーフテスト(80問・制限時間2時間10分)</span>
         </label>
       </div>
     </div>
@@ -531,7 +569,7 @@
         </label>
         <label class="radio-row">
           <input type="radio" name="exam-source" value="original" onchange="updateExamSourceUI()">
-          <span>本試験専用問題<span style="color:#b06a2e;font-size:12px;font-weight:600;">（画面でのみ実施可能）</span></span>
+          <span>本試験専用問題</span>
         </label>
         <div id="original-select-wrap" style="padding: 8px 0 8px 32px; display: none;">
           <select id="exam-original-select" style="width: 100%;" disabled>
@@ -555,11 +593,8 @@
           <input type="radio" name="exam-method" value="screen">
           <span>📱 画面で実施(時間制限付き)</span>
         </label>
-        <div style="padding: 0 0 8px 32px; font-size: 12px; color: #7a8a99;">
+        <div id="method-screen-desc" style="padding: 0 0 8px 32px; font-size: 12px; color: #7a8a99;">
           AM・PMそれぞれ2時間10分の制限時間で解きます。
-        </div>
-        <div id="screen-only-note" style="display:none; padding: 4px 12px 8px 32px; font-size: 12px; color: #b06a2e;">
-          ※ 本試験専用問題は、画面での実施のみに対応しています（紙での印刷はできません）。
         </div>
       </div>
     </div>
@@ -573,6 +608,16 @@
         </div>
         <label class="switch">
           <input type="checkbox" id="exam-shuffle-choices">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="setting-row" id="exam-shuffle-order-row" style="opacity: .5;">
+        <div>
+          <div class="lbl">出題順をランダム化</div>
+          <div class="desc">「全範囲からランダム出題」以外の場合に選択可。OFF(既定)は元の問題番号順、ONで科目構成順・科目内ランダム</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="exam-shuffle-order" disabled>
           <span class="slider"></span>
         </label>
       </div>
@@ -787,13 +832,13 @@
 
     <div class="card">
       <h2>🔥 復習の進度</h2>
-      <div style="font-size: 13px; color: #4a5a6a; margin-bottom: 12px;">忘却曲線レベルごとの問題数(数値が高いほど習得が進んでいる)</div>
+      <div style="font-size: 13px; color: #4a5a6a; margin-bottom: 12px;">忘却曲線レベルごとの問題数(数値が高いほど習得が進んでいる)。「未出題」は一度も解いていない問題、「レベル0」は解いたが未修得(不正解でリセット)の問題です。</div>
       <div id="stats-interval-list"></div>
     </div>
 
     <div class="card">
       <h2>📚 科目別 学習進度</h2>
-      <div style="font-size: 12px; color: #4a5a6a; margin-bottom: 10px;">忘却曲線レベル別の問題分布。色が右に進むほど習得が進んでいます。</div>
+      <div style="font-size: 12px; color: #4a5a6a; margin-bottom: 10px;">忘却曲線レベル別の問題分布。灰=未出題、紫=Lv0(解答済み・未修得)。色が右に進むほど習得が進んでいます。</div>
       <div id="stats-subject-list">
         <div style="color: #7a8a99; text-align: center; padding: 20px 0;">学習履歴がまだありません</div>
       </div>
@@ -847,8 +892,46 @@
     <div class="card">
       <h2>問題データ</h2>
       <div id="setting-q-version" style="font-size:13px;color:#4a5a6a;margin-bottom:10px;">問題データ: —</div>
+      <div style="font-size:12px;color:#7a8a99;margin-bottom:10px;line-height:1.7;">
+        このアプリはオンライン専用ですが、JSONファイルで問題を追加できます。<br>
+        取り込んだファイルは端末に保存されるため、毎回取り込み直す必要はありません。<br>
+        オンラインで配信中の問題とID（id）が重複した場合は、常にオンライン側の内容が優先されます。
+      </div>
+      <input type="file" id="import-questions-file" accept="application/json,.json" style="display:none;" onchange="handleImportQuestionsFile(event)">
       <div class="setting-row">
+        <div>
+          <div class="lbl">JSONファイルを取り込む</div>
+          <div class="desc">questions.jsonと同じ形式（{"questions":[...]}）</div>
+        </div>
+        <button class="btn" onclick="triggerImportQuestionsFile()" style="padding: 8px 14px; font-size: 13px;">📥 取り込む</button>
+      </div>
+      <div class="setting-row">
+        <div>
+          <div class="lbl">端末保存分を削除</div>
+          <div class="desc">取り込んだ問題データ（端末保存分）のみ削除します</div>
+        </div>
+        <button class="btn danger" onclick="clearCustomQuestions()" style="padding: 8px 14px; font-size: 13px;">🗑️ 削除</button>
+      </div>
+    </div>
 
+    <div class="card">
+      <h2>☁️ 同期・取り込み（スプレッドシート）</h2>
+      <div style="font-size:12px;color:#7a8a99;line-height:1.7;margin-bottom:10px;">
+        ホーム画面で設定した<b>学校・学生番号</b>のデータ（解いた記録・メモ・出題除外）を、先生が管理するスプレッドシートと同期します。
+        2台の端末で続きを解くときや、機種変更のときに使います。
+      </div>
+      <input type="password" id="restore-key" placeholder="あなたのダウンロードキー（例 ABCD-EFGH-JKMN）" autocomplete="off" autocapitalize="off" spellcheck="false"
+             style="width:100%;box-sizing:border-box;border:1px solid #cfd8e0;border-radius:10px;padding:10px 12px;font:inherit;font-size:14px;margin-bottom:10px;">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:6px;"><input type="checkbox" id="restore-save-key" onchange="onSaveKeyToggle(this)"> ダウンロードキーをこの端末に保存する</label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;"><input type="checkbox" id="restore-autosync" onchange="onAutoSyncToggle(this)"> アプリ起動時に自動で同期する</label>
+      <button class="btn" id="restore-btn" onclick="restoreFromSheet()" style="width:100%;">📥 スプレッドシートから取り込む（確認あり）</button>
+      <div id="restore-status" style="font-size:12px;color:#7a8a99;margin-top:8px;line-height:1.7;min-height:1em;"></div>
+      <div style="font-size:12px;color:#c0504d;margin-top:8px;line-height:1.7;">
+        ※ キーは先生から渡された<b>あなた専用のキー</b>です（他の人のキーでは使えません）。<br>
+        ※ 保存したキーはこの端末のブラウザ内に残ります。<b>共用の端末では保存しないでください。</b><br>
+        ※ 新しい端末では、<b>問題を解く前に</b>同期してください。先に解くと、その問題のシート側の記録が端末の値で上書きされます。<br>
+        ※ 端末を切り替えるときは、ホームの「🔄 同期」を押してから解き始めてください（自動同期は起動時のみです）。2台で同じ問題を続けて解くと、後から送られた記録が優先されます。
+      </div>
     </div>
 
     <div class="card">
@@ -860,7 +943,6 @@
         </div>
         <button class="btn danger" onclick="confirmReset()" style="padding: 8px 14px; font-size: 13px;">🗑️ 削除</button>
       </div>
-      <div style="font-size:12px;color:#7a8a99;margin-top:10px;line-height:1.7;">バックアップ（書き出し・復元）は、統合ホーム画面下部の「学習データのバックアップ」からまとめて行えます。</div>
     </div>
 
   </div>
@@ -875,6 +957,24 @@
       <button onclick="closeManual()" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 6px 14px; border-radius: 8px; font-size: 14px; cursor: pointer;">✕ 閉じる</button>
     </div>
     <iframe id="manual-frame" src="" style="flex: 1; border: none; width: 100%;" title="使用説明書"></iframe>
+  </div>
+</div>
+
+<!-- 読み物モーダル -->
+<div class="modal-bg" id="reader-modal" style="padding: 0; align-items: stretch;">
+  <div style="background: white; width: 100%; max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; height: 100%;">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 14px 16px; background: #2c5f7c; color: white; flex-shrink: 0;">
+      <span style="font-size: 16px; font-weight: 600; flex: 1;">📘 読み物</span>
+      <a href="./yomimono.html" target="_blank" rel="noopener" style="color: white; font-size: 12px; text-decoration: underline; white-space: nowrap;">別タブで開く</a>
+      <button onclick="closeReader()" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 6px 14px; border-radius: 8px; font-size: 14px; cursor: pointer;">✕ 閉じる</button>
+    </div>
+    <div id="reader-offline" style="display: none; flex: 1; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 32px; color: #2c3e50;">
+      <div style="font-size: 44px; margin-bottom: 12px;">📡</div>
+      <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">オンラインで接続してください</div>
+      <div style="font-size: 13px; color: #7a8a99; line-height: 1.7; margin-bottom: 16px;">読み物はオンライン専用です（端末には保存されません）。<br>接続を確認してから、もう一度お試しください。</div>
+      <button onclick="openReader()" style="background: #2c5f7c; color: white; border: none; padding: 10px 22px; border-radius: 8px; font-size: 14px; cursor: pointer;">再読み込み</button>
+    </div>
+    <iframe id="reader-frame" src="" style="flex: 1; border: none; width: 100%;" title="読み物"></iframe>
   </div>
 </div>
 
@@ -901,7 +1001,7 @@
 <div class="modal-bg" id="modal">
   <div class="modal">
     <h2 id="modal-title">確認</h2>
-    <p id="modal-text"></p>
+    <p id="modal-text" style="white-space:pre-line;"></p>
     <div class="btn-row">
       <button class="btn outline" onclick="closeModal()">キャンセル</button>
       <button class="btn danger" id="modal-confirm">実行</button>
@@ -949,6 +1049,7 @@ function compareVersion(a, b) {
 // 問題データ（外部 data/questions.json から起動時に読み込む）
 // 旧 BUNDLED_QUESTIONS の代わりに loadQuestionData() で取得する
 let BUNDLED_QUESTIONS = [];
+let CUSTOM_QUESTION_COUNT = 0; // 端末に保存済みのJSON取り込み分のうち、実際に採用された件数（オンライン分と重複しなかった件数）
 let QUESTION_DATA_VERSION = null;
 
 // 問題データの正規化（choice1~4形式 と choices配列形式の両方に対応）
@@ -1072,7 +1173,31 @@ async function loadQuestionData() {
         merged.push(q);
       });
     }
+
+    // 端末に保存済みの取り込みデータ（JSONインポート分）をマージ。
+    // オンライン取得分（questions.json / questions-2.json）とIDが被る場合は、
+    // 常にオンライン側を優先する（＝取り込み分はスキップ）。
+    let customCount = 0;
+    try {
+      if (db) {
+        const custom = await dbGetAll('customQuestions');
+        if (custom && custom.length) {
+          const seenAll = new Set(merged.map(q => q && q.id).filter(x => x != null));
+          custom.forEach(q => {
+            if (!q || q.id == null) return;
+            if (seenAll.has(q.id)) return; // オンライン側優先。重複はスキップ
+            seenAll.add(q.id);
+            merged.push(q);
+            customCount++;
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('customQuestions の読み込みをスキップしました:', e.message);
+    }
+
     BUNDLED_QUESTIONS = merged.map(normalizeQuestion);
+    CUSTOM_QUESTION_COUNT = customCount;
     // バージョンは両方を連結（version.json 比較・表示用）
     QUESTION_DATA_VERSION = [primary.version, extra && extra.version].filter(Boolean).join('+') || null;
     return true;
@@ -1086,7 +1211,7 @@ async function loadQuestionData() {
 
 //=========================================================
 const DB_NAME = 'StudyAppDB';
-const DB_VERSION = 6; // questionData ストア廃止（毎回fetchのためIndexedDB不使用）
+const DB_VERSION = 7; // customQuestions ストア追加（JSON取り込み分を端末に保存し、次回以降も再利用）
 let db = null;
 
 function openDB() {
@@ -1136,6 +1261,10 @@ function openDB() {
       }
       if (!d.objectStoreNames.contains('mutedQuestions')) {
         d.createObjectStore('mutedQuestions', { keyPath: 'questionId' });
+      }
+      // JSONファイルから取り込んだ問題データ（端末に保存し、次回起動時も再取り込み不要）
+      if (!d.objectStoreNames.contains('customQuestions')) {
+        d.createObjectStore('customQuestions', { keyPath: 'id' });
       }
     };
   });
@@ -1193,11 +1322,6 @@ function dbClear(store) {
 //   (例: https://script.google.com/macros/s/AKfycb.../exec)
 const SYNC_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyUuD4I3pZS9yR5iHwwTRrsKuzF5cAvuYb7Zu-QehmqRTkNAct2RGWhCmWg8ovDkvmX/exec';
 const SYNC_APP_ID = 'kokushi';
-const SYNC_INITIAL_SETTINGS_KEY = 'syncInitialDone'; // settingsストアのkey
-// full送信の「版」。この数字を上げると、全端末が次回起動時に一度だけfullを再送する。
-// 送信内容やシート側の受け取り方を変えたときに、既存端末のデータをシートへ入れ直すために使う。
-// （旧版は value:true を保存していたため、それも「版が古い」として自動的に再送対象になる）
-const SYNC_FULL_VERSION = 2;
 
 // 端末ID（UUID）：ホーム画面(index.html)側と同じキーを使い、未生成なら自分で生成する
 // （kokushiアプリを直接開いた場合や、ホーム未起動のまま使われた場合の保険）
@@ -1242,22 +1366,6 @@ function getStudentInfo() {
   return { school, studentNo, deviceId: getOrCreateDeviceId() };
 }
 
-async function isInitialSyncDone() {
-  try {
-    const rec = await dbGet('settings', SYNC_INITIAL_SETTINGS_KEY);
-    if (!rec || !rec.value) return false;
-    // 保存されている版が現行版と一致するときだけ「送信済み」とみなす。
-    // 旧版の value:true や古い版番号の場合は false になり、起動時にfullが1回だけ再送される。
-    return rec.value === SYNC_FULL_VERSION;
-  } catch (e) {
-    return false;
-  }
-}
-
-async function markInitialSyncDone() {
-  try { await dbPut('settings', { key: SYNC_INITIAL_SETTINGS_KEY, value: SYNC_FULL_VERSION }); } catch (e) {}
-}
-
 //=========================================================
 // 送信キュー（オフライン・送信失敗時に備えた再送のしくみ）
 //=========================================================
@@ -1274,8 +1382,10 @@ function saveSyncQueue(q) {
 
 // キューに積んでから送信を試みる（積む時点でlocalStorageに保存されるので、
 // このタイミングでアプリを閉じてもタブを閉じても、データそのものは消えない）
+let _localChangeSeq = 0; // 端末側で送信対象の変更が起きるたびに増える（同期中に端末が変わったかの判定用）
 function enqueueSync(payload) {
   if (!SYNC_ENDPOINT || SYNC_ENDPOINT.indexOf('★') !== -1) return false; // 未設定時は何もしない
+  _localChangeSeq++;
   const student = getStudentInfo();
   const record = Object.assign({
     app: SYNC_APP_ID,
@@ -1329,7 +1439,6 @@ async function flushSyncQueue() {
           method: 'POST', mode: 'no-cors', keepalive: true,
           headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body)
         });
-        if (rec.type === 'full') await markInitialSyncDone();
         q = removeFromSyncQueue(rec);
       } catch (e) {
         break; // オフライン等の送信失敗：ここで中断し、残りは次回の再送に回す
@@ -1343,43 +1452,15 @@ async function flushSyncQueue() {
 // オンライン復帰時に自動再送
 window.addEventListener('online', flushSyncQueue);
 
-// 初回のみ：これまでの全学習データ（進捗・メモ・出題除外）をまとめて送信
-// 呼ぶのはアプリ起動時（afterDataReady）だけ。解答やメモ操作からは呼ばない。
-let _fullSyncStarted = false; // 同一セッション内での二重送信よけ
-async function syncFullData() {
-  if (_fullSyncStarted) return;
-  _fullSyncStarted = true;
-  try {
-    const [progressList, memoList, mutedList] = await Promise.all([
-      dbGetAll('progress'), dbGetAll('memos'), dbGetAll('mutedQuestions')
-    ]);
-    const queued = enqueueSync({
-      type: 'full',
-      progress: progressList,
-      memos: memoList,
-      mutedQuestions: mutedList
-    });
-    // キューに積んだ時点で初回完了とみなす。キューはlocalStorageに残るため、
-    // オフラインでもこの後の起動・オンライン復帰時に必ず再送される（＝取りこぼしはない）。
-    // 送信完了まで待つと、その間の解答が「初回未完了」と判定されfullが何度も送られてしまう。
-    if (queued) await markInitialSyncDone();
-  } catch (e) {
-    _fullSyncStarted = false; // 失敗したら次回の起動でやり直す
-    console.error('sync(full)エラー:', e);
-  }
-}
-
-// 起動時に1回だけ呼ぶ：未送信のキューを再送し、初回なら全データを送る
+// 起動時に1回だけ呼ぶ：前回送りきれなかった未送信キューを再送する
+// （端末内の全データを送る「初回全送信」は廃止。解答・メモ・出題除外のたびに差分を送る）
 async function syncOnStartup() {
-  try {
-    if (!(await isInitialSyncDone())) await syncFullData();
-    else flushSyncQueue(); // 前回送りきれなかった分の再送
-  } catch (e) { console.error('sync(startup)エラー:', e); }
+  try { flushSyncQueue(); }
+  catch (e) { console.error('sync(startup)エラー:', e); }
 }
 
 // 通常モード（今日の演習・科目別演習・復習モード）で1問解いた直後に呼ぶ
-// full は起動時に送信済みのため、ここでは常に1問ぶんの差分だけを送る。
-// （旧版はここでfullに化けてしまい、メモ・出題除外の列が空のまま記録されていた）
+// 常に1問ぶんの差分だけを送る。
 async function syncOneAnswer(qid) {
   try {
     enqueueSync({
@@ -1420,6 +1501,352 @@ async function syncExamFinished(sessionId, examType, correctCount, total, subjec
     });
   } catch (e) { console.error('sync(exam)エラー:', e); }
 }
+
+//=========================================================
+// スプレッドシートからの取り込み・同期（2台の端末を最新に保つ）
+//=========================================================
+// ・認証は「学生ごとのダウンロードキー」（閲覧キーとは別）。キーは設定画面で入力する。
+//   「この端末に保存」にチェックすると localStorage に保存され、以後は入力なしで同期できる。
+// ・取り込む対象は、ホーム画面(index.html)で設定した 学校・学生番号 の、このアプリ分のデータのみ。
+// ・対象：解いた記録(progress)・メモ(memos)・出題除外(mutedQuestions)。
+// ・マージ規則：
+//     進捗     … 最終解答日時が新しい方を採用（解いた日は両方を合算）。端末のデータは消さない。
+//     メモ     … 手動の取り込み：端末にメモがある問題は端末を優先／同期：シートの内容で更新（空のシートで消すことはしない）
+//     出題除外 … 手動の取り込み：足すだけ／同期：シートの内容に揃える（解除も反映）
+// ・シートが持たない情報（本試験セッションの履歴・各種設定・過去の「解いた日」の全履歴）は同期できない。
+
+const DL_KEY_STORE = 'suite_dl_key';       // {key, school, studentNo}。キーは学生ごと・アプリ共通なので index-4/5 で共有する
+const AUTOSYNC_STORE = 'suite_autosync';   // '1'＝起動時に自動同期（index-4/5 で共有）
+const LASTSYNC_STORE = 'suite_lastsync_' + SYNC_APP_ID;
+
+// 保存済みキーは「保存したときの学校・学生番号」と今の設定が一致するときだけ使う
+// （ホームでリセットして別の学生になった場合に、前の人のキーを使わないため）
+function getSavedDlKey() {
+  try {
+    const o = JSON.parse(localStorage.getItem(DL_KEY_STORE) || 'null');
+    if (!o || !o.key) return '';
+    const st = getStudentInfo();
+    if ((o.school || '') === st.school && normalizeStudentNo(o.studentNo) === st.studentNo) return String(o.key);
+  } catch (e) {}
+  return '';
+}
+function saveDlKey(key) {
+  const st = getStudentInfo();
+  try { localStorage.setItem(DL_KEY_STORE, JSON.stringify({ key: key, school: st.school, studentNo: st.studentNo })); } catch (e) {}
+}
+function clearSavedDlKey() { try { localStorage.removeItem(DL_KEY_STORE); } catch (e) {} }
+function isAutoSyncOn() { try { return localStorage.getItem(AUTOSYNC_STORE) === '1' && !!getSavedDlKey(); } catch (e) { return false; } }
+function setAutoSync(on) { try { localStorage.setItem(AUTOSYNC_STORE, on ? '1' : '0'); } catch (e) {} }
+function markLastSync() { try { localStorage.setItem(LASTSYNC_STORE, new Date().toISOString()); } catch (e) {} }
+function fmtSyncTime(iso) {
+  const d = new Date(iso); if (isNaN(d)) return '';
+  return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+function setRestoreStatus(msg, isError) {
+  const el = document.getElementById('restore-status');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.style.color = isError ? '#c0504d' : '';
+}
+function setSyncBar(msg, isError) {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.style.color = isError ? '#c0504d' : '';
+}
+// 設定画面のチェックボックス・入力欄と、ホームの同期表示を現在の状態に合わせる
+function updateSyncUi() {
+  const saved = !!getSavedDlKey();
+  const sv = document.getElementById('restore-save-key'); if (sv) sv.checked = saved;
+  const au = document.getElementById('restore-autosync'); if (au) { au.checked = isAutoSyncOn(); au.disabled = !saved; }
+  const key = document.getElementById('restore-key');
+  if (key) key.placeholder = saved ? '保存済み（空欄のままで保存済みのキーを使います）' : 'あなたのダウンロードキー（例 ABCD-EFGH-JKMN）';
+  let last = ''; try { last = localStorage.getItem(LASTSYNC_STORE) || ''; } catch (e) {}
+  setSyncBar(!saved ? 'ダウンロードキー未保存（設定で保存すると同期できます）' : (last ? '最終同期 ' + fmtSyncTime(last) : '未同期'));
+}
+function onSaveKeyToggle(el) {
+  if (!el.checked) {
+    clearSavedDlKey(); setAutoSync(false); updateSyncUi();
+    setRestoreStatus('保存したキーを削除しました。');
+  } else if (!getSavedDlKey()) {
+    setRestoreStatus('キーを入力して「取り込む」を押すと、キーが確認できた時点でこの端末に保存されます。');
+  }
+}
+function onAutoSyncToggle(el) {
+  if (el.checked && !getSavedDlKey()) {
+    el.checked = false;
+    setRestoreStatus('先にダウンロードキーを保存してください（キーを入力し、保存にチェックして「取り込む」）。', true);
+    return;
+  }
+  setAutoSync(el.checked);
+  setRestoreStatus(el.checked ? '次回から、アプリ起動時に自動で同期します。' : '自動同期をオフにしました。');
+}
+
+// 同期の前提チェック。満たさなければ理由つきでエラーにする
+function syncPrecheck() {
+  const student = getStudentInfo();
+  if (!student.school || !student.studentNo) throw new Error('ホーム画面で「学校」と「学生番号」を設定してください。');
+  if (!SYNC_ENDPOINT || SYNC_ENDPOINT.indexOf('★') !== -1) throw new Error('送信先URLが未設定です。');
+  if (!navigator.onLine) throw new Error('オフラインです。ネットワークに接続してからやり直してください。');
+  return student;
+}
+
+// スプレッドシートからこの学生の分を取得する（失敗時は理由つきのErrorを投げる。認証エラーは err.auth=true）
+async function fetchRestoreData(key, student) {
+  let data;
+  const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  const timer = setTimeout(() => { if (ctrl) ctrl.abort(); }, 60000);
+  try {
+    const qs = new URLSearchParams({
+      action: 'restore', key: key, app: SYNC_APP_ID,
+      school: student.school, studentNo: student.studentNo
+    });
+    const res = await fetch(SYNC_ENDPOINT + '?' + qs.toString(), ctrl ? { signal: ctrl.signal } : undefined);
+    data = await res.json();
+  } catch (e) {
+    clearTimeout(timer);
+    throw new Error((e && e.name === 'AbortError')
+      ? '時間内に応答がありませんでした。通信状況を確認して、もう一度お試しください。'
+      : '取得に失敗しました。通信状況を確認するか、GASが新バージョンで再デプロイされているか確認してください。');
+  }
+  clearTimeout(timer);
+  if (!data || data.status === 'error') {
+    const err = new Error((data && data.message) || '不明なエラー');
+    err.auth = /unauthorized/.test(err.message);
+    throw err;
+  }
+  return data;
+}
+
+function buildProgressFromSheetItem(it) {
+  const rec = {
+    questionId: it.questionId,
+    correctCount: it.correctCount != null ? it.correctCount : 0,
+    incorrectCount: it.incorrectCount != null ? it.incorrectCount : 0,
+    intervalLevel: it.intervalLevel != null ? it.intervalLevel : 0,
+    lastResult: it.lastResult || null,
+    lastAnsweredAt: it.lastAnsweredAt || null,
+    nextReviewAt: it.nextReviewAt || null
+  };
+  rec.danger = it.danger === true;
+  if (it.lastGrade) rec.lastGrade = it.lastGrade;
+  // 「解いた日」の全履歴はシートに無いため、最終解答日の1件だけを復元する
+  rec.answerDays = [];
+  if (rec.lastAnsweredAt) {
+    const d = new Date(rec.lastAnsweredAt);
+    if (!isNaN(d)) rec.answerDays = [localDateStr(d)];
+  }
+  return rec;
+}
+function _tsOf(iso) {
+  if (!iso) return 0;
+  const t = new Date(iso).getTime();
+  return isNaN(t) ? 0 : t;
+}
+
+function dbPutMany(store, list) {
+  return new Promise((resolve, reject) => {
+    if (!list || list.length === 0) { resolve(); return; }
+    const tx = db.transaction(store, 'readwrite');
+    const os = tx.objectStore(store);
+    list.forEach(v => os.put(v));
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('書き込みが中止されました'));
+  });
+}
+function dbDeleteMany(store, keys) {
+  return new Promise((resolve, reject) => {
+    if (!keys || keys.length === 0) { resolve(); return; }
+    const tx = db.transaction(store, 'readwrite');
+    const os = tx.objectStore(store);
+    keys.forEach(k => os.delete(k));
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('書き込みが中止されました'));
+  });
+}
+
+// 取り込み計画を作る（まだ何も書き込まない）。mode: 'safe'＝足すだけ／'sync'＝メモ・出題除外もシートに揃える
+function planRestore(items, mode) {
+  const plan = { progress: [], memos: [], muted: [], unmute: [],
+    stat: { progNew: 0, progUpdate: 0, progKeep: 0, memoNew: 0, memoUpdate: 0, memoKeep: 0, muteNew: 0, muteSkip: 0, unmute: 0 } };
+  const qById = {};
+  (state.questions || []).forEach(q => { qById[q.id] = q; });
+
+  items.forEach(it => {
+    const qid = it.questionId;
+
+    // --- 進捗 ---
+    if (it.hasProgress) {
+      const sheetRec = buildProgressFromSheetItem(it);
+      const local = state.progress[qid];
+      if (!local) {
+        plan.progress.push(sheetRec); plan.stat.progNew++;
+      } else if (_tsOf(sheetRec.lastAnsweredAt) > _tsOf(local.lastAnsweredAt)) {
+        const days = new Set(getAnswerDays(local).concat(sheetRec.answerDays));
+        sheetRec.answerDays = Array.from(days).sort().slice(-400);
+        plan.progress.push(sheetRec); plan.stat.progUpdate++;
+      } else {
+        plan.stat.progKeep++;
+      }
+    }
+
+    // --- メモ ---
+    if (it.memo && String(it.memo).length > 0) {
+      const localMemo = state.memos[qid];
+      if (localMemo == null || localMemo === '') {
+        plan.memos.push({ questionId: qid, text: String(it.memo) }); plan.stat.memoNew++;
+      } else if (localMemo !== it.memo) {
+        if (mode === 'sync') { plan.memos.push({ questionId: qid, text: String(it.memo) }); plan.stat.memoUpdate++; }
+        else plan.stat.memoKeep++;
+      }
+    }
+
+    // --- 出題除外 ---
+    if (it.muted === true && !state.mutedQuestions[qid]) {
+      const q = qById[qid];
+      if (q && isExamOnlyQuestion(q)) { plan.stat.muteSkip++; return; } // 本試験専用問題は除外にできない
+      plan.muted.push({ questionId: qid, originalSubject: q ? q.subject : '' }); plan.stat.muteNew++;
+    } else if (mode === 'sync' && it.muted === false && state.mutedQuestions[qid]) {
+      plan.unmute.push(qid); plan.stat.unmute++;
+    }
+  });
+  return plan;
+}
+function planCount(plan) { return plan.progress.length + plan.memos.length + plan.muted.length + plan.unmute.length; }
+function planSummary(plan) {
+  const parts = [];
+  if (plan.progress.length) parts.push('記録' + plan.progress.length + '問');
+  if (plan.memos.length) parts.push('メモ' + plan.memos.length + '件');
+  if (plan.muted.length || plan.unmute.length) parts.push('出題除外' + (plan.muted.length + plan.unmute.length) + '件');
+  return parts.join('・');
+}
+async function applyRestorePlan(plan) {
+  await dbPutMany('progress', plan.progress);
+  await dbPutMany('memos', plan.memos);
+  await dbPutMany('mutedQuestions', plan.muted);
+  await dbDeleteMany('mutedQuestions', plan.unmute);
+  plan.progress.forEach(r => { state.progress[r.questionId] = r; });
+  plan.memos.forEach(m => { state.memos[m.questionId] = m.text; });
+  plan.muted.forEach(m => { state.mutedQuestions[m.questionId] = m; });
+  plan.unmute.forEach(id => { delete state.mutedQuestions[id]; });
+  updateHomeStats();
+}
+
+// 設定画面の「取り込む」ボタン（確認ダイアログあり）。キーの入力・保存もここで行う
+async function restoreFromSheet() {
+  const btn = document.getElementById('restore-btn');
+  const keyEl = document.getElementById('restore-key');
+  const typed = keyEl ? keyEl.value.trim() : '';
+  const key = typed || getSavedDlKey();
+  if (!key) { setRestoreStatus('あなたのダウンロードキーを入力してください。', true); return; }
+  let student;
+  try { student = syncPrecheck(); } catch (e) { setRestoreStatus(e.message, true); return; }
+
+  if (btn) btn.disabled = true;
+  setRestoreStatus('スプレッドシートからデータを取得しています…（数十秒かかることがあります）');
+  let data;
+  try { data = await fetchRestoreData(key, student); }
+  catch (e) { if (btn) btn.disabled = false; setRestoreStatus('取得できませんでした：' + e.message, true); return; }
+  if (btn) btn.disabled = false;
+
+  // キーが確認できたので、保存指定があれば端末に保存する（初めて保存したときは自動同期もオンにする）
+  const sv = document.getElementById('restore-save-key');
+  if (typed && sv && sv.checked) {
+    saveDlKey(typed);
+    try { if (localStorage.getItem(AUTOSYNC_STORE) === null) setAutoSync(true); } catch (e) {}
+  }
+  if (keyEl) keyEl.value = '';
+  updateSyncUi();
+
+  if (!Array.isArray(data.items) || data.items.length === 0) {
+    setRestoreStatus('キーは確認できましたが、この学校・学生番号のデータはスプレッドシートにまだありません。' + ((typed && sv && sv.checked) ? '（キーは保存しました）' : ''));
+    return;
+  }
+  const plan = planRestore(data.items, 'safe');
+  const st = plan.stat;
+  if (planCount(plan) === 0) {
+    markLastSync(); updateSyncUi();
+    setRestoreStatus('取り込む差分はありません（端末のデータが最新です）。');
+    return;
+  }
+  const lines = [
+    '学校：' + student.school + ' ／ 学生番号：' + student.studentNo,
+    '【解いた記録】新規 ' + st.progNew + '問、更新 ' + st.progUpdate + '問' + (st.progKeep ? '（端末の方が新しいため据え置き ' + st.progKeep + '問）' : ''),
+    '【メモ】新規 ' + st.memoNew + '件' + (st.memoKeep ? '（端末に別のメモがあるため据え置き ' + st.memoKeep + '件）' : ''),
+    '【出題除外】新規 ' + st.muteNew + '件',
+    '端末のデータは消さず、マージして取り込みます。実行しますか？'
+  ];
+  showModal('スプレッドシートから取り込み', lines.join('\n'), async () => {
+    try {
+      await applyRestorePlan(plan);
+      closeModal();
+      markLastSync(); updateSyncUi();
+      setRestoreStatus('取り込みました（' + planSummary(plan) + '）。');
+      showToast('取り込みました', 3000);
+    } catch (e) {
+      console.error('restore(apply)エラー:', e);
+      closeModal();
+      setRestoreStatus('書き込み中にエラーが起きました：' + (e && e.message ? e.message : e), true);
+    }
+  });
+}
+
+// --- 同期の実行（ホームの「🔄 同期」ボタン／起動時の自動同期） ---
+// 流れ：①未送信分をシートへ送る → ②シートから最新を取得 → ③端末へマージ
+// ①が成功し、取得中に端末側の変更も無かったときだけ、メモ・出題除外もシートの内容に揃える（解除も反映）。
+// それ以外のときは「足すだけ」の安全なマージにとどめ、端末の変更を失わないようにする。
+let _syncRunning = false;
+async function runSync(trigger) {
+  if (_syncRunning) return;
+  const manual = trigger === 'button';
+  const key = getSavedDlKey();
+  if (!key) {
+    if (manual) { showToast('設定でダウンロードキーを保存してください', 3000); goSettings(); }
+    return;
+  }
+  let student;
+  try { student = syncPrecheck(); }
+  catch (e) { setSyncBar(e.message, true); if (manual) showToast(e.message, 3000); return; }
+
+  _syncRunning = true;
+  const btn = document.getElementById('sync-btn'); if (btn) btn.disabled = true;
+  setSyncBar('同期中…');
+  try {
+    await flushSyncQueue();
+    const seq = _localChangeSeq;
+    const data = await fetchRestoreData(key, student);
+    const clean = loadSyncQueue().length === 0 && seq === _localChangeSeq;
+    const plan = planRestore(Array.isArray(data.items) ? data.items : [], clean ? 'sync' : 'safe');
+    const n = planCount(plan);
+    if (n > 0) await applyRestorePlan(plan);
+    markLastSync(); updateSyncUi();
+    if (n > 0) showToast('同期しました（' + planSummary(plan) + '）', 3000);
+    else if (manual) showToast('同期しました（変更なし）', 2000);
+  } catch (e) {
+    const msg = e.auth ? 'ダウンロードキーが正しくありません。設定で入れ直してください。' : e.message;
+    setSyncBar('同期できませんでした：' + msg, true);
+    if (manual) showToast('同期できませんでした', 3000);
+  } finally {
+    _syncRunning = false;
+    if (btn) btn.disabled = false;
+  }
+}
+
+// アプリ起動時：自動同期がオンなら、先にシートから最新を取り込んでから、従来の送信処理(syncOnStartup)へ進む。
+// （先に端末の古いデータを送ってしまい、シート側を古い値で上書きするのを防ぐ順番）
+let _startupSyncDone = false;
+async function startupSyncThenUpload() {
+  updateSyncUi();
+  if (!_startupSyncDone) {
+    _startupSyncDone = true;
+    if (isAutoSyncOn()) { try { await runSync('startup'); } catch (e) {} }
+  }
+  syncOnStartup();
+}
+updateSyncUi();
 
 //=========================================================
 // アプリ状態
@@ -1513,6 +1940,9 @@ async function afterDataReady() {
   const settingExam = await dbGet('settings', 'examType');
   if (settingExam) state.settings.examType = settingExam.value;
 
+  const settingDailySubj = await dbGet('settings', 'dailySubjects');
+  if (settingDailySubj && Array.isArray(settingDailySubj.value)) dailyState.subjects = settingDailySubj.value;
+
   const settingExclude = await dbGet('settings', 'excludeYears');
   if (settingExclude) state.settings.excludeYears = settingExclude.value || [];
 
@@ -1522,11 +1952,16 @@ async function afterDataReady() {
   if (se) se.value = state.settings.examType;
 
   const dvl = document.getElementById('data-version-label');
-  if (dvl) dvl.textContent = '問題データ: ver.' + (QUESTION_DATA_VERSION || '—') + '（' + state.questions.length + '問）';
+  if (dvl) {
+    let dvlText = '問題データ: ver.' + (QUESTION_DATA_VERSION || '—') + '（' + state.questions.length + '問）';
+    if (CUSTOM_QUESTION_COUNT > 0) dvlText += '　うち端末取り込み分 ' + CUSTOM_QUESTION_COUNT + '問';
+    dvl.textContent = dvlText;
+  }
+  renderSettingsQVersion();
 
   updateHomeStats();
   renderSettingsYearList();
-  syncOnStartup(); // 初回なら全学習データを送信／それ以外は未送信分の再送を試みる
+  startupSyncThenUpload(); // 自動同期オンなら先にシートから取り込み → 初回なら全学習データを送信／それ以外は未送信分の再送
 }
 
 // 問題データ取り込み案内オーバーレイ
@@ -1536,8 +1971,12 @@ async function afterDataReady() {
 // 今日の演習モード
 //=========================================================
 const dailyState = {
-  totalCount: 20
+  totalCount: 20,
+  subjects: []   // 選択された科目（空＝全科目）。settings 'dailySubjects' に記憶
 };
+
+// 科目の表示順（本試験の科目分類表に準拠。未知の科目は末尾）
+const DAILY_SUBJECT_ORDER = ['医療概論', '衛生学・公衆衛生学', '関係法規', '解剖学', '生理学', '病理学概論', '臨床医学総論', '臨床医学各論', 'リハビリテーション医学', '総合問題(基礎科目)', '東洋医学概論', '経絡経穴概論', '東洋医学臨床論', '総合問題(専門科目)', 'はり理論', 'きゅう理論', 'あマ指理論', 'あん摩マッサージ指圧理論', '不適切問題'];
 
 function goDailySetup() {
   const filtered = filterByExamType(state.questions);
@@ -1545,7 +1984,8 @@ function goDailySetup() {
     alert('該当する問題がありません。設定の試験種別フィルターをご確認ください。');
     return;
   }
-  showScreen('daily-setup', '今日の演習', '問題数を選んで開始');
+  renderDailySubjectList();
+  showScreen('daily-setup', '今日の演習', '問題数・科目を選んで開始');
 }
 
 function selectDailyCount(count) {
@@ -1553,6 +1993,60 @@ function selectDailyCount(count) {
   document.querySelectorAll('.daily-count-btn').forEach(btn => {
     btn.classList.toggle('active', parseInt(btn.dataset.count) === count);
   });
+}
+
+// 今日の演習の対象となる科目と問題数（dailyEnabled=true・試験種別フィルター適用後）
+function getDailySubjectCounts() {
+  const counts = {};
+  filterByExamType(state.questions).forEach(q => {
+    if (!q.dailyEnabled) return;
+    counts[q.subject] = (counts[q.subject] || 0) + 1;
+  });
+  return counts;
+}
+
+function renderDailySubjectList() {
+  const box = document.getElementById('daily-subject-list');
+  if (!box) return;
+  const counts = getDailySubjectCounts();
+  const names = Object.keys(counts).sort((a, b) => {
+    const ai = DAILY_SUBJECT_ORDER.indexOf(a), bi = DAILY_SUBJECT_ORDER.indexOf(b);
+    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+  });
+  box.innerHTML = '';
+  names.forEach(name => {
+    const row = document.createElement('label');
+    row.className = 'daily-subject-row';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = dailyState.subjects.includes(name);
+    cb.onchange = () => toggleDailySubject(name, cb.checked);
+    const nm = document.createElement('span');
+    nm.className = 'name';
+    nm.textContent = name;
+    const info = document.createElement('span');
+    info.className = 'info';
+    info.textContent = counts[name] + '問';
+    row.appendChild(cb); row.appendChild(nm); row.appendChild(info);
+    box.appendChild(row);
+  });
+}
+
+async function saveDailySubjects() {
+  try { await dbPut('settings', { key: 'dailySubjects', value: dailyState.subjects.slice() }); } catch (e) {}
+}
+
+function toggleDailySubject(name, checked) {
+  const set = new Set(dailyState.subjects);
+  if (checked) set.add(name); else set.delete(name);
+  dailyState.subjects = Array.from(set);
+  saveDailySubjects();
+}
+
+function dailySelectAllSubjects(on) {
+  dailyState.subjects = on ? Object.keys(getDailySubjectCounts()) : [];
+  renderDailySubjectList();
+  saveDailySubjects();
 }
 
 function startDailyMode() {
@@ -1572,13 +2066,16 @@ function startDailyMode() {
     bySubject[q.subject].push(q);
   });
 
-  // 科目リストをその都度シャッフル（毎回ランダムな科目順になる）
-  const availableSubjects = shuffleArray(Object.keys(bySubject));
-
-  if (availableSubjects.length === 0) {
+  const allSubjects = Object.keys(bySubject);
+  if (allSubjects.length === 0) {
     alert('該当する問題がありません');
     return;
   }
+
+  // 出題対象科目：選択科目（現在の対象に存在するもの）。未選択なら全科目。
+  // シャッフルしておくことで、余りの配分先が毎回ランダムになる
+  const selected = dailyState.subjects.filter(s => bySubject[s]);
+  const availableSubjects = shuffleArray([...(selected.length > 0 ? selected : allSubjects)]);
 
   // 各科目から「未出題優先 + 復習日が近い順」で並べたキューを作る
   const subjectQueues = {};
@@ -1600,8 +2097,17 @@ function startDailyMode() {
     subjectQueues[subj] = [...shuffledUntried, ...tried];
   }
 
-  // ランダムな科目順でラウンドロビン出題（毎回科目ごとの問題数が異なる）
+  // 問題数 ÷ 科目数 を各科目に配分。余りは（シャッフル済みの）先頭の科目から1問ずつ＝ランダムな科目へ
+  const n = availableSubjects.length;
+  const base = Math.floor(totalCount / n);
+  const remainder = totalCount % n;
   const picked = [];
+  availableSubjects.forEach((subj, idx) => {
+    const quota = base + (idx < remainder ? 1 : 0);
+    picked.push(...subjectQueues[subj].splice(0, quota));
+  });
+
+  // 科目の問題数が足りず配分に満たなかった分は、他の対象科目から順に補充
   let exhausted = false;
   while (picked.length < totalCount && !exhausted) {
     exhausted = true;
@@ -1625,8 +2131,11 @@ function startDailyMode() {
     if (!confirm(`利用可能な問題が ${picked.length}問 のみです（希望: ${totalCount}問）。\n続行しますか?`)) return;
   }
 
+  // 科目がまとまらないよう出題順をシャッフル
+  const queue = shuffleArray([...picked]);
+
   // 通常の出題モードに乗せる
-  state.questionQueue = picked;
+  state.questionQueue = queue;
   state.currentIndex = 0;
   state.currentMode = 'daily';
   state.currentSubject = null;
@@ -1691,6 +2200,23 @@ const EXAM_STRUCTURE = {
   }
 };
 
+// ハーフテストの科目別問題数（本試験の半分。奇数は 解剖学5・生理学4 のように振り分け）
+// はりきゅう: AM45問 + PM45問 = 90問 / あマ指: AM40問 + PM40問 = 80問
+const EXAM_HALF_COUNTS = {
+  hari_kyu: {
+    '医療概論': 2, '衛生学・公衆衛生学': 3, '関係法規': 2, '解剖学': 5, '生理学': 4,
+    '病理学概論': 3, '臨床医学総論': 5, '臨床医学各論': 11, 'リハビリテーション医学': 6, '総合問題(基礎科目)': 4,
+    '東洋医学概論': 8, '経絡経穴概論': 10, '東洋医学臨床論': 12, '総合問題(専門科目)': 5,
+    'はり理論': 5, 'きゅう理論': 5
+  },
+  amashi: {
+    '医療概論': 2, '衛生学・公衆衛生学': 3, '関係法規': 2, '解剖学': 4, '生理学': 4,
+    '病理学概論': 3, '臨床医学総論': 5, '臨床医学各論': 8, 'リハビリテーション医学': 6, '総合問題(基礎科目)': 3,
+    '東洋医学概論': 7, '経絡経穴概論': 7, '東洋医学臨床論': 15, '総合問題(専門科目)': 5,
+    'あマ指理論': 6
+  }
+};
+
 // 構成行の問題プールを取得
 function getQuestionsForSection(row, allQuestions, examType, yearFilter, excludeUnsuitable) {
   const subjectsToMatch = row.mergedSubjects ? [...row.mergedSubjects] : [row.subject];
@@ -1719,7 +2245,9 @@ function getQuestionsForSection(row, allQuestions, examType, yearFilter, exclude
 }
 
 // 本試験形式の問題抽出(科目別に必要数を抜粋)
-function buildExamQuestions(examType, allQuestions, yearFilter, excludeMuted = false) {
+// useActualCount=true の場合、科目構成表(EXAM_STRUCTURE)の人数に合わせず、
+// その抽出条件(年度など)に実在する問題数をそのまま採用する（＝不足扱いにしない）
+function buildExamQuestions(examType, allQuestions, yearFilter, excludeMuted = false, useActualCount = false, isHalf = false) {
   const structure = EXAM_STRUCTURE[examType];
   const result = {
     questions: [],
@@ -1735,8 +2263,15 @@ function buildExamQuestions(examType, allQuestions, yearFilter, excludeMuted = f
     let pool = getQuestionsForSection(row, baseQuestions, examType, yearFilter, true);
     // 出題除外問題を除外（オプション選択時のみ）
     if (excludeMuted) pool = pool.filter(q => !isMutedQuestion(q));
-    const needed = row.count;
     const available = pool.length;
+    let needed;
+    if (isHalf) {
+      // ハーフ：年度指定は実在数の半分（切り上げ）、それ以外は半分用の科目別問題数
+      const halfMap = EXAM_HALF_COUNTS[examType] || {};
+      needed = useActualCount ? Math.ceil(available / 2) : (halfMap[row.subject] != null ? halfMap[row.subject] : Math.ceil(row.count / 2));
+    } else {
+      needed = useActualCount ? available : row.count;
+    }
     const taken = Math.min(needed, available);
 
     let picked = [];
@@ -1776,6 +2311,8 @@ const examState = {
   endTime: null,
   amTimeLimit: 130 * 60,
   pmTimeLimit: 130 * 60,
+  halfTimeLimit: 130 * 60, // ハーフテストは全体で2時間10分（AM/PM区別なし）
+  isHalf: false,
   amStartTime: null,
   pmStartTime: null,
   timerInterval: null,
@@ -1788,43 +2325,71 @@ const examState = {
   choiceOrders: {},  // {questionIndex: [origIdx順序], correctMapped: 表示上の正答番号}
 };
 
-function goExamSetup() {
-  // 「年度を選んで出題」用：dailyEnabled=true の問題が存在する年度のみ一覧化
-  // （本試験専用問題の年度は含めない）
+function getSelectedExamBaseType() {
+  const v = document.querySelector('input[name="exam-type"]:checked').value;
+  return v.replace(/_half$/, '');
+}
+
+// 試験種別（ハーフ含む）が変わったときの表示更新
+function onExamTypeChange() {
+  const v = document.querySelector('input[name="exam-type"]:checked').value;
+  const isHalf = v.endsWith('_half');
+  const paperRadio = document.querySelector('input[name="exam-method"][value="paper"]');
+  const screenRadio = document.querySelector('input[name="exam-method"][value="screen"]');
+  const paperRow = document.getElementById('method-paper-row');
+  const paperDesc = document.getElementById('method-paper-desc');
+  const screenDesc = document.getElementById('method-screen-desc');
+  if (isHalf) {
+    screenRadio.checked = true;
+    paperRadio.disabled = true;
+    if (paperRow) paperRow.style.opacity = '.5';
+    if (paperDesc) paperDesc.textContent = 'ハーフテストは画面実施のみです。';
+    if (screenDesc) screenDesc.textContent = '問題数の半分・全体で2時間10分の制限時間(AM・PMの区別なし)で解きます。';
+  } else {
+    paperRadio.disabled = false;
+    if (paperRow) paperRow.style.opacity = '1';
+    if (paperDesc) paperDesc.textContent = '問題用紙PDFを出力して印刷します。自己採点後、結果を入力できます。';
+    if (screenDesc) screenDesc.textContent = 'AM・PMそれぞれ2時間10分の制限時間で解きます。';
+  }
+  populateExamSelectors();
+}
+
+// 選択中の試験種別に該当する年度／本試験専用問題だけをプルダウンに表示
+function populateExamSelectors() {
+  const examType = getSelectedExamBaseType();
+  const typeLabel = examType === 'hari_kyu' ? 'はりきゅう' : 'あマ指';
+
+  // 「年度を選んで出題」用：dailyEnabled=true の問題が存在する年度のみ（本試験専用問題は含めない）
+  const select = document.getElementById('exam-year-select');
+  const prevYear = select.value;
   const yearSet = new Set();
   state.questions.forEach(q => {
-    if (q.dailyEnabled && !isNaN(Number(q.year))) yearSet.add(`${q.examType}_${q.year}`);
+    if (q.examType === examType && q.dailyEnabled && !isNaN(Number(q.year))) yearSet.add(Number(q.year));
   });
-  const years = Array.from(yearSet).sort();
-
-  const select = document.getElementById('exam-year-select');
-  select.innerHTML = '<option value="">取り込み済みの年度から選択...</option>';
-  years.forEach(key => {
-    const [type, year] = key.split('_').slice(-2);
-    // hari_kyu_34 -> ['hari', 'kyu', '34']の場合があるので最後の2要素
-    const parts = key.split('_');
-    const yr = parts[parts.length - 1];
-    const tp = parts.slice(0, -1).join('_');
-    const typeLabel = tp === 'hari_kyu' ? 'はりきゅう' : 'あマ指';
-    const opt = document.createElement('option');
-    opt.value = key;
-    opt.textContent = `${typeLabel} 第${yr}回`;
-    select.appendChild(opt);
-  });
+  const years = Array.from(yearSet).sort((x, y) => x - y);
 
   if (years.length === 0) {
     select.innerHTML = '<option value="">問題データがありません</option>';
+  } else {
+    select.innerHTML = '<option value="">取り込み済みの年度から選択...</option>';
+    years.forEach(yr => {
+      const opt = document.createElement('option');
+      opt.value = `${examType}_${yr}`;
+      opt.textContent = `${typeLabel} 第${yr}回`;
+      select.appendChild(opt);
+    });
+    if (prevYear && Array.from(select.options).some(o => o.value === prevYear)) select.value = prevYear;
   }
 
-  // 「本試験専用問題」用：dailyEnabled=false かつ subjectEnabled=false かつ examEnabled=true の問題
-  // 年度（year）の値ごとにグルーピングしてドロップダウンに表示
+  // 「本試験専用問題」用：選択中の試験種別の専用問題のみ
+  const origSelect = document.getElementById('exam-original-select');
+  const prevOrig = origSelect.value;
   const originalYearSet = new Set();
   state.questions.forEach(q => {
-    if (isExamOnlyQuestion(q)) originalYearSet.add(q.year);
+    if (q.examType === examType && isExamOnlyQuestion(q)) originalYearSet.add(q.year);
   });
   const originalYears = Array.from(originalYearSet).sort();
 
-  const origSelect = document.getElementById('exam-original-select');
   if (originalYears.length === 0) {
     origSelect.innerHTML = '<option value="">本試験専用問題がありません</option>';
   } else {
@@ -1835,8 +2400,12 @@ function goExamSetup() {
       opt.textContent = yr;
       origSelect.appendChild(opt);
     });
+    if (prevOrig && Array.from(origSelect.options).some(o => o.value === prevOrig)) origSelect.value = prevOrig;
   }
+}
 
+function goExamSetup() {
+  onExamTypeChange(); // プルダウン再構築＋ハーフ時の実施方法制御
   updateExamSourceUI();
   showScreen('exam-setup', '本試験形式モード', '実施条件を選択');
 }
@@ -1854,29 +2423,21 @@ function updateExamSourceUI() {
   origWrap.style.display = source === 'original' ? 'block' : 'none';
   origSel.disabled = source !== 'original';
 
-  // 本試験専用問題は画面実施のみ（紙＝印刷は不可）。
-  // 紙のラジオを無効化し、選択されていたら画面へ切り替える。
-  const isOriginal = source === 'original';
-  const paperRow  = document.getElementById('method-paper-row');
-  const paperDesc = document.getElementById('method-paper-desc');
-  const paperRadio = document.querySelector('input[name="exam-method"][value="paper"]');
-  const screenRadio = document.querySelector('input[name="exam-method"][value="screen"]');
-  const screenNote = document.getElementById('screen-only-note');
-  if(paperRadio){
-    paperRadio.disabled = isOriginal;
-    if(isOriginal && paperRadio.checked){ screenRadio.checked = true; }
-  }
-  if(paperRow)  paperRow.style.opacity  = isOriginal ? '0.4' : '';
-  if(paperDesc) paperDesc.style.opacity = isOriginal ? '0.4' : '';
-  if(screenNote) screenNote.style.display = isOriginal ? 'block' : 'none';
+  // 「出題順をランダム化」は元の問題順が存在する「年度指定」「本試験専用問題」でのみ意味を持つ
+  // （「全範囲からランダム出題」は元々問題順の概念がなく、常に科目構成順のランダム抽出のため対象外）
+  const orderCb = document.getElementById('exam-shuffle-order');
+  const orderRow = document.getElementById('exam-shuffle-order-row');
+  if (orderCb) orderCb.disabled = source === 'random';
+  if (orderRow) orderRow.style.opacity = source === 'random' ? '.5' : '1';
 }
 
 function startExamMode() {
-  const examType = document.querySelector('input[name="exam-type"]:checked').value;
+  const examTypeRaw = document.querySelector('input[name="exam-type"]:checked').value;
+  const isHalf = examTypeRaw.endsWith('_half');
+  const examType = examTypeRaw.replace(/_half$/, '');
   const source = document.querySelector('input[name="exam-source"]:checked').value;
   let method = document.querySelector('input[name="exam-method"]:checked').value;
-  // 本試験専用問題は画面実施のみ（紙＝印刷は不可）。UIで無効化しているが、念のため強制する。
-  if (source === 'original') method = 'screen';
+  if (isHalf) method = 'screen'; // ハーフテストは画面実施のみ
   // 学習履歴への反映は必ず行う（オプションは廃止。実際に解答した試験のみ記録される）
   const recordHistory = true;
   const shuffleChoices = document.getElementById('exam-shuffle-choices').checked;
@@ -1917,19 +2478,25 @@ function startExamMode() {
   }
 
   // 科目構成に従って問題抽出
-  const buildResult = buildExamQuestions(examType, state.questions, yearFilter, excludeMuted);
+  // 年度指定(source==='year')は実際に存在したその回の試験を再現するモードのため、
+  // 科目構成表の人数(EXAM_STRUCTURE)に合わせず、その年度に実在する問題をそのまま全て採用する
+  // （出題基準は第29回で全面改定されており、28回以前は科目ごとの出題数自体が現行と異なるため、
+  // 　現行基準の人数を「不足」として扱うのは誤り）。
+  // ランダム出題・本試験専用問題は従来どおり、現行の科目構成表に合わせて抽出する。
+  const useActualCount = source === 'year';
+  const buildResult = buildExamQuestions(examType, state.questions, yearFilter, excludeMuted, useActualCount, isHalf);
 
   if (buildResult.questions.length === 0) {
     alert('該当する問題が一切ありません。問題データを取り込んでください。');
     return;
   }
 
-  // 不足科目の警告
+  // 不足科目の警告（年度指定時は上記の理由によりそもそも発生しない）
   if (buildResult.shortages.length > 0) {
     const shortageMsg = buildResult.shortages.map(s =>
       `・${s.subject}(${s.section}): ${s.available}/${s.needed}問`
     ).join('\n');
-    const totalNeeded = EXAM_STRUCTURE[examType].totalQ;
+    const totalNeeded = isHalf ? EXAM_STRUCTURE[examType].totalQ / 2 : EXAM_STRUCTURE[examType].totalQ;
     const actualCount = buildResult.questions.length;
     const msg = `以下の科目で問題数が不足しています:\n\n${shortageMsg}\n\n本来${totalNeeded}問の試験を、${actualCount}問で実施します。\n\n続行しますか?`;
     if (!confirm(msg)) return;
@@ -1937,11 +2504,24 @@ function startExamMode() {
 
   let questions = buildResult.questions;
 
-  // 問題のソート(年度指定時は問題番号順、それ以外はAM→PM順)
-  if (source === 'year') {
+  // 問題のソート
+  // ・年度指定/本試験専用問題：既定は元の問題番号順。「出題順をランダム化」ONなら科目構成順のまま(科目内は抽出時のランダム順)
+  // ・全範囲からランダム出題：常に科目構成順(AM→PM順)のみ（元の問題順という概念がないため）
+  const randomizeOrder = source !== 'random' && document.getElementById('exam-shuffle-order').checked;
+  // 問題番号は「15改」のように訂正・改題を示す接尾辞が付く場合があり、単純な引き算(a.questionNo - b.questionNo)では
+  // 数値化できずNaNになって並び順が崩れる。先頭の数字部分だけを取り出して数値比較し、
+  // 数値部分が同じ場合(例:"15"と"15改")は元の表記の文字列比較で安定的に順序付けする。
+  const qNoSortKey = (no) => {
+    const s = String(no == null ? '' : no).trim();
+    const m = s.match(/^(\d+)/);
+    return { num: m ? parseInt(m[1], 10) : Infinity, raw: s };
+  };
+  if (source !== 'random' && !randomizeOrder) {
     questions.sort((a, b) => {
       if (a.section !== b.section) return a.section === 'AM' ? -1 : 1;
-      return a.questionNo - b.questionNo;
+      const ka = qNoSortKey(a.questionNo), kb = qNoSortKey(b.questionNo);
+      if (ka.num !== kb.num) return ka.num - kb.num;
+      return ka.raw < kb.raw ? -1 : ka.raw > kb.raw ? 1 : 0;
     });
   } else {
     questions.sort((a, b) => {
@@ -1968,6 +2548,7 @@ function startExamMode() {
   examState.choiceNotes = {}; // 本試験中の選択肢メモ {questionIndex: {origIdx: 'sei'|'go'|'hate'}}
   examState.currentIndex = 0;
   examState.examType = examType;
+  examState.isHalf = isHalf;
   examState.recordHistory = recordHistory;
   examState.examMethod = method;
   examState.shuffleChoices = shuffleChoices;
@@ -1980,7 +2561,7 @@ function startExamMode() {
 
   if (method === 'paper') {
     examState.isRunning = false; // PDFモードはタイマー不要
-    generateExamPaper(questions, examType, source, yearLabel, shuffleChoices, choiceOrders);
+    generateExamPaper(questions, examType, source, yearLabel, shuffleChoices, choiceOrders, false, null, randomizeOrder);
     return;
   }
 
@@ -2000,7 +2581,10 @@ function updateExamTimer() {
 
   const now = new Date();
   let elapsed, limit;
-  if (examState.currentSection === 'AM') {
+  if (examState.isHalf) {
+    elapsed = Math.floor((now - examState.startTime) / 1000);
+    limit = examState.halfTimeLimit;
+  } else if (examState.currentSection === 'AM') {
     elapsed = Math.floor((now - examState.amStartTime) / 1000);
     limit = examState.amTimeLimit;
   } else {
@@ -2023,6 +2607,7 @@ function updateExamTimer() {
 
   if (remain === 0) {
     // 時間切れ
+    if (examState.isHalf) { showToast('時間切れ。試験を終了します'); finishExam(); return; }
     if (examState.currentSection === 'AM') {
       // PM開始の確認
       const hasPM = examState.questions.some(q => q.section === 'PM');
@@ -2061,8 +2646,14 @@ function showExamQuestion() {
   const sectionQs = examState.questions.filter(qq => qq.section === q.section);
   const sectionIdx = sectionQs.findIndex(qq => qq === q) + 1;
 
-  document.getElementById('exam-section-label').textContent = q.section;
-  document.getElementById('exam-progress-text').textContent = `問${sectionIdx} / ${sectionQs.length}`;
+  if (examState.isHalf) {
+    // ハーフテストはAM/PMの区別なし。通し番号で表示
+    document.getElementById('exam-section-label').textContent = 'ハーフ';
+    document.getElementById('exam-progress-text').textContent = `問${examState.currentIndex + 1} / ${examState.questions.length}`;
+  } else {
+    document.getElementById('exam-section-label').textContent = q.section;
+    document.getElementById('exam-progress-text').textContent = `問${sectionIdx} / ${sectionQs.length}`;
+  }
 
   const examTypeBadge = document.getElementById('exam-q-type');
   if (q.examType === 'amashi') {
@@ -2138,7 +2729,7 @@ function showExamQuestion() {
   const isLast = examState.currentIndex === examState.questions.length - 1;
   document.getElementById('exam-next-btn').textContent = isLast ? '試験終了 →' : '次へ →';
 
-  showScreen('exam-running', '本試験形式モード', `${examState.examType === 'hari_kyu' ? 'はりきゅう' : 'あマ指'}`);
+  showScreen('exam-running', '本試験形式モード', `${examState.examType === 'hari_kyu' ? 'はりきゅう' : 'あマ指'}${examState.isHalf ? ' ハーフ' : ''}`);
 }
 
 function examSelectChoice(num) {
@@ -2302,10 +2893,10 @@ async function finishExam() {
   const es = elapsed % 60;
   document.getElementById('result-time').textContent = `${eh}時間 ${em}分 ${es}秒`;
 
-  showScreen('exam-result', '試験結果', `${examState.examType === 'hari_kyu' ? 'はりきゅう' : 'あマ指'}`);
+  showScreen('exam-result', '試験結果', `${examState.examType === 'hari_kyu' ? 'はりきゅう' : 'あマ指'}${examState.isHalf ? ' ハーフ' : ''}`);
 }
 
-async function generateExamPaper(questions, examType, source, yearLabel, shuffleChoices, choiceOrders, skipSave, createdAt) {
+async function generateExamPaper(questions, examType, source, yearLabel, shuffleChoices, choiceOrders, skipSave, createdAt, randomizeOrder) {
   const typeLabel = examType === 'hari_kyu' ? 'はり師きゅう師' : 'あマ指';
   const titleSuffix = yearLabel || (source === 'year' ? '年度模試' : 'ランダム模試');
 
@@ -2397,6 +2988,9 @@ async function generateExamPaper(questions, examType, source, yearLabel, shuffle
   const shuffleNote = shuffleChoices
     ? '<br>・<strong>選択肢の順序はランダム化</strong>されています。元の問題と異なる順序で表示されます。'
     : '';
+  const orderNote = (source !== 'random' && randomizeOrder)
+    ? '<br>・<strong>出題順はランダム化</strong>されています。元の問題番号順とは異なる順序で出題されます。'
+    : '';
 
   const html = `
 <!DOCTYPE html>
@@ -2447,7 +3041,7 @@ async function generateExamPaper(questions, examType, source, yearLabel, shuffle
   <strong>注意事項</strong>
   ・各問題には1〜4の四つの選択肢があります。質問に最も適した答えを一つ選んでください。<br>
   ・午前(AM)・午後(PM)それぞれ制限時間は2時間10分です。<br>
-  ・解答は別紙またはお手元の解答用紙に記入してください。${shuffleNote}
+  ・解答は別紙またはお手元の解答用紙に記入してください。${shuffleNote}${orderNote}
 </div>
 
 ${renderSection('午前(AM)', amQs, 1, 0)}
@@ -2750,6 +3344,7 @@ async function submitPaperResult() {
   state.questions.forEach(q => { masterById[q.id] = q; });
 
   examState.examType = session.examType;
+  examState.isHalf = false;
   examState.startTime = new Date(session.createdAt);
   examState.endTime = new Date();
   examState.questions = session.items.map(it => {
@@ -2877,60 +3472,44 @@ function reviewExamWrong() {
 //=========================================================
 function goSearch() {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  showScreen('search', '問題検索', '問題文・選択肢から検索');
-  // ラジオボタンの見た目を更新
-  updateSearchTargetUI();
-  updateSearchScopeUI();
+  showScreen('search', '問題検索', 'キーワード・年度・問題番号から検索');
   // 前回の結果をリセット
   document.getElementById('search-status').textContent = '';
   document.getElementById('search-results').style.display = 'none';
-  // ラジオ変更時にUIを更新
-  document.querySelectorAll('input[name="search-target"]').forEach(r => {
-    r.onchange = updateSearchTargetUI;
+  // Enterキーで検索（3つの入力欄すべて）
+  ['search-input', 'search-year', 'search-qno'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.onkeydown = (e) => { if (e.key === 'Enter' && !e.isComposing) execSearch(); };
   });
-  document.querySelectorAll('input[name="search-scope"]').forEach(r => {
-    r.onchange = updateSearchScopeUI;
-  });
-  // Enterキーで検索
-  const input = document.getElementById('search-input');
-  input.onkeydown = (e) => { if (e.key === 'Enter') execSearch(); };
 }
 
-function updateSearchTargetUI() {
-  const qLabel = document.getElementById('search-target-q-label');
-  const cLabel = document.getElementById('search-target-c-label');
-  const qChecked = document.getElementById('search-target-q').checked;
-  if (qLabel) {
-    qLabel.style.borderColor = qChecked ? '#2c5f7c' : '#d4dde4';
-    qLabel.style.background  = qChecked ? '#e3f0f7' : '#f5f7fa';
-    qLabel.style.fontWeight  = qChecked ? '600' : '400';
-  }
-  if (cLabel) {
-    cLabel.style.borderColor = !qChecked ? '#2c5f7c' : '#d4dde4';
-    cLabel.style.background  = !qChecked ? '#e3f0f7' : '#f5f7fa';
-    cLabel.style.fontWeight  = !qChecked ? '600' : '400';
-  }
+// 数字以外を取り除く（全角数字は半角に変換）
+function toHalfDigits(str) {
+  return String(str || '')
+    .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+    .replace(/[^0-9]/g, '');
+}
+function sanitizeDigits(el) {
+  const v = toHalfDigits(el.value);
+  if (v !== el.value) el.value = v;
 }
 
-function updateSearchScopeUI() {
-  const allLabel = document.getElementById('search-scope-all-label');
-  const filteredLabel = document.getElementById('search-scope-filtered-label');
-  const allChecked = document.getElementById('search-scope-all').checked;
-  if (allLabel) {
-    allLabel.style.borderColor = allChecked ? '#2c5f7c' : '#d4dde4';
-    allLabel.style.background  = allChecked ? '#e3f0f7' : '#f5f7fa';
-    allLabel.style.fontWeight  = allChecked ? '600' : '400';
+function onSearchInput(e) {
+  // 年度・問題番号は数字のみ（IME変換中は触らない）
+  if (e && e.target && (e.target.id === 'search-year' || e.target.id === 'search-qno')) {
+    if (!e.isComposing) sanitizeDigits(e.target);
   }
-  if (filteredLabel) {
-    filteredLabel.style.borderColor = !allChecked ? '#2c5f7c' : '#d4dde4';
-    filteredLabel.style.background  = !allChecked ? '#e3f0f7' : '#f5f7fa';
-    filteredLabel.style.fontWeight  = !allChecked ? '600' : '400';
-  }
-}
-
-function onSearchInput() {
   // 入力中はステータスをクリア
   document.getElementById('search-status').textContent = '';
+}
+
+// 検索結果に付ける「除外されている旨」のマーク一覧
+function getSearchExclusionTags(q) {
+  const tags = [];
+  if (state.mutedQuestions && state.mutedQuestions[q.id]) tags.push('🚫 出題除外');
+  if (isYearExcluded(q)) tags.push('📅 除外年度');
+  if (state.settings.examType !== 'all' && q.examType !== state.settings.examType) tags.push('⚙️ 試験種別設定外');
+  return tags;
 }
 
 // 全角↔半角を統一する正規化（英数字・記号を半角に、カタカナは全角に統一）
@@ -2959,53 +3538,56 @@ function normalizeText(str) {
 
 function execSearch() {
   const raw      = (document.getElementById('search-input').value || '').trim();
-  const target   = document.querySelector('input[name="search-target"]:checked').value;
-  const scopeEl  = document.querySelector('input[name="search-scope"]:checked');
-  const scope    = scopeEl ? scopeEl.value : 'filtered';
+  const yearRaw  = (document.getElementById('search-year').value || '').trim();
+  const qnoRaw   = (document.getElementById('search-qno').value || '').trim();
   const statusEl = document.getElementById('search-status');
   const resultsWrap = document.getElementById('search-results');
 
-  // ① 未入力チェック
-  if (!raw) {
+  // 全欄空欄は不可
+  if (!raw && !yearRaw && !qnoRaw) {
     statusEl.style.color = '#e09b2d';
-    statusEl.textContent = '⚠️ 検索ワードを入力してください';
+    statusEl.textContent = '⚠️ キーワード・年度・問題番号のいずれかを入力してください';
     resultsWrap.style.display = 'none';
     return;
   }
+
+  // 年度・問題番号は数字のみ（全角数字は半角に変換してから判定）
+  const yearHalf = yearRaw.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+  const qnoHalf  = qnoRaw.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+  if ((yearHalf && !/^[0-9]+$/.test(yearHalf)) || (qnoHalf && !/^[0-9]+$/.test(qnoHalf))) {
+    statusEl.style.color = '#e09b2d';
+    statusEl.textContent = '⚠️ 年度・問題番号は数字のみ入力してください';
+    resultsWrap.style.display = 'none';
+    return;
+  }
+  const yearNum = yearHalf ? parseInt(yearHalf, 10) : null;
+  const qnoNum  = qnoHalf  ? parseInt(qnoHalf, 10)  : null;
 
   // スペース（全角・半角）で分割してAND条件化、空文字除去・正規化
-  const keywords = raw.split(/[\s　]+/).filter(k => k.length > 0).map(k => normalizeText(k));
+  const keywords = raw ? raw.split(/[\s　]+/).filter(k => k.length > 0).map(k => normalizeText(k)) : [];
 
-  // 検索対象プールを scope に応じて決定
-  let allQ;
-  if (scope === 'all') {
-    // 全問題から検索（本試験専用問題は除く・年度除外・出題除外は無視）
-    allQ = state.questions.filter(q => !isExamOnlyQuestion(q));
-  } else {
-    // 出題される問題のみ（除外設定に基づいた範囲）
-    allQ = filterByExamType(state.questions);
-  }
+  // 検索範囲は本試験専用問題を除く全問題に固定（出題除外・除外年度の問題は含め、結果にマークを表示）
+  const allQ = state.questions.filter(q => !isExamOnlyQuestion(q));
 
-  // ② 全キーワードがすべてヒットする問題を抽出（AND検索・正規化済みテキストで比較）
+  // 全条件に合致する問題を抽出（キーワードは問題文＋選択肢を対象にAND検索）
   const matched = allQ.filter(q => {
-    if (target === 'question') {
-      const text = normalizeText(q.questionText);
-      return keywords.every(kw => text.includes(kw));
-    } else {
-      const allChoices = normalizeText((q.choices || []).join(' '));
-      return keywords.every(kw => allChoices.includes(kw));
+    if (yearNum !== null) {
+      const y = Number(q.year);
+      if (isNaN(y) || y !== yearNum) return false;
     }
+    if (qnoNum !== null) {
+      // 「15改」のような接尾辞付きの問題番号は先頭の数字部分で照合する
+      const m = normalizeText(String(q.questionNo == null ? '' : q.questionNo)).trim().match(/^(\d+)/);
+      if (!m || parseInt(m[1], 10) !== qnoNum) return false;
+    }
+    if (keywords.length > 0) {
+      const text = normalizeText((q.questionText || '') + ' ' + (q.choices || []).join(' '));
+      if (!keywords.every(kw => text.includes(kw))) return false;
+    }
+    return true;
   });
 
-  // ③ 50件以上チェック
-  if (matched.length >= 50) {
-    statusEl.style.color = '#e09b2d';
-    statusEl.textContent = `⚠️ ${matched.length}件以上ヒットしました。より詳細なワードで検索してください。`;
-    resultsWrap.style.display = 'none';
-    return;
-  }
-
-  // ④ 0件
+  // 0件
   if (matched.length === 0) {
     statusEl.style.color = '#7a8a99';
     statusEl.textContent = '該当する問題が見つかりませんでした。';
@@ -3013,14 +3595,19 @@ function execSearch() {
     return;
   }
 
-  // ⑤ 結果表示
-  const kwLabel = keywords.length > 1 ? keywords.map(k => `「${k}」`).join(' AND ') : `「${keywords[0]}」`;
-  const scopeLabel = scope === 'all' ? '全問題' : '出題される問題';
+  // 結果表示
+  const condParts = [];
+  if (keywords.length > 0) condParts.push(keywords.length > 1 ? keywords.map(k => `「${k}」`).join(' AND ') : `「${keywords[0]}」`);
+  if (yearNum !== null) condParts.push(`第${yearNum}回`);
+  if (qnoNum !== null)  condParts.push(`問${qnoNum}`);
+  const excludedCount = matched.filter(q => getSearchExclusionTags(q).length > 0).length;
   statusEl.style.color = '#2c5f7c';
-  statusEl.textContent = `${matched.length}件 ヒット（${kwLabel}）`;
+  statusEl.textContent = `${matched.length}件 ヒット（${condParts.join(' / ')}）`;
 
   document.getElementById('search-result-label').textContent =
-    `検索結果: ${matched.length}件（${scopeLabel}対象 / タップで問題を確認）`;
+    `検索結果: ${matched.length}件（全問題対象` +
+    (excludedCount > 0 ? ` / うち除外マーク付き ${excludedCount}件` : '') +
+    ` / タップで問題を確認）`;
 
   const listEl = document.getElementById('search-result-list');
   listEl.innerHTML = '';
@@ -3072,14 +3659,18 @@ function execSearch() {
 
     // 選択肢プレビュー（いずれかのキーワードがヒットした選択肢を表示）
     let choicesHtml = '';
-    if (target === 'choices') {
+    if (keywords.length > 0) {
       const hitChoices = (q.choices || [])
         .map((c, i) => ({ c, i }))
-        .filter(({ c }) => keywords.some(kw => (c || '').toLowerCase().includes(kw)));
-      choicesHtml = `<div class="choices-preview">`
-        + hitChoices.map(({ c, i }) => `<div>${i + 1}. ${highlight(c)}</div>`).join('')
-        + `</div>`;
+        .filter(({ c }) => keywords.some(kw => normalizeText(c || '').includes(kw)));
+      if (hitChoices.length > 0) {
+        choicesHtml = `<div class="choices-preview">`
+          + hitChoices.map(({ c, i }) => `<div>${i + 1}. ${highlight(c)}</div>`).join('')
+          + `</div>`;
+      }
     }
+    const exTags = getSearchExclusionTags(q);
+    if (exTags.length > 0) card.classList.add('excluded');
 
     card.innerHTML = `
       <div class="meta">
@@ -3088,9 +3679,9 @@ function execSearch() {
         <span class="badge subject">${escapeHtml(q.subject)}</span>
         <span style="font-size: 12px; color: #7a8a99; margin-left: auto;">問${escapeHtml(String(q.questionNo))}</span>
       </div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:${(state.memos[q.id] && state.memos[q.id].trim()) || (state.mutedQuestions && state.mutedQuestions[q.id]) ? '6px' : '0'};">
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:${((state.memos[q.id] && state.memos[q.id].trim()) || exTags.length > 0) ? '6px' : '0'};">
         ${(state.memos[q.id] && state.memos[q.id].trim()) ? '<span style="font-size:11px;background:#2c5f7c;color:white;padding:2px 8px;border-radius:10px;">📝 メモあり</span>' : ''}
-        ${(state.mutedQuestions && state.mutedQuestions[q.id]) ? '<span style="font-size:11px;background:#ffc107;color:#212529;padding:2px 8px;border-radius:10px;font-weight:600;">🚫 出題除外</span>' : ''}
+        ${exTags.map(t => `<span class="search-ex-tag">${escapeHtml(t)}</span>`).join('')}
       </div>
       <div class="q-text">${highlight(q.questionText)}</div>
       ${choicesHtml}
@@ -3120,7 +3711,7 @@ function updateHomeStats() {
   const filtered = filterByExamType(state.questions);
   document.getElementById('stat-total').textContent = filtered.length;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
   const filteredIds = new Set(filtered.map(q => q.id));
 
   // 解答済み・復習対象ともに除外年度を考慮
@@ -3236,15 +3827,8 @@ function goSettings() {
   if (appEl) {
     appEl.textContent = 'アプリ: ver.' + APP_VERSION;
   }
-  // 問題データバージョンを表示（fetch済みデータ基準）
-  const el = document.getElementById('setting-q-version');
-  if (el) {
-    if (BUNDLED_QUESTIONS && BUNDLED_QUESTIONS.length > 0) {
-      el.textContent = '問題データ: ver.' + (QUESTION_DATA_VERSION || '—') + '（' + BUNDLED_QUESTIONS.length + '問）';
-    } else {
-      el.textContent = '問題データ: 読み込み中…';
-    }
-  }
+  // 問題データバージョンを表示（fetch済みデータ＋端末取り込み分）
+  renderSettingsQVersion();
   showScreen('settings', '設定', '');
 }
 
@@ -3252,6 +3836,86 @@ function goSettings() {
 // 問題データの再取り込み（設定画面などから呼ぶ）
 //=========================================================
 // reimportQuestionData / performUpdateCheck / manualUpdateCheck は廃止
+
+//=========================================================
+// JSONファイルからの問題取り込み（オフライン端末保存・オンライン優先マージ）
+//=========================================================
+// 取り込んだJSONファイルはIndexedDB（customQuestionsストア）に保存されるため、
+// 一度取り込めば次回以降アプリを開いたときも再取り込み不要でそのまま使える。
+// オンラインのquestions.json/questions-2.jsonとIDが被る場合は、常にオンライン側を優先する。
+
+function triggerImportQuestionsFile() {
+  const input = document.getElementById('import-questions-file');
+  if (input) { input.value = ''; input.click(); }
+}
+
+async function handleImportQuestionsFile(event) {
+  const file = event && event.target && event.target.files && event.target.files[0];
+  if (!file) return;
+  await importCustomQuestionsFromFile(file);
+}
+
+async function importCustomQuestionsFromFile(file) {
+  let json;
+  try {
+    const text = await file.text();
+    json = JSON.parse(text);
+  } catch (e) {
+    showToast('⚠️ JSONファイルの読み込みに失敗しました: ' + e.message, 4000);
+    return;
+  }
+  const arr = json && Array.isArray(json.questions) ? json.questions
+            : (Array.isArray(json) ? json : null);
+  if (!arr || arr.length === 0) {
+    showToast('⚠️ questions配列が見つかりませんでした', 4000);
+    return;
+  }
+
+  let added = 0, updatedCnt = 0, skipped = 0;
+  for (const q of arr) {
+    if (!q || q.id == null) { skipped++; continue; }
+    try {
+      const existing = await dbGet('customQuestions', q.id);
+      await dbPut('customQuestions', q);
+      if (existing) updatedCnt++; else added++;
+    } catch (e) {
+      skipped++;
+    }
+  }
+
+  // 再読み込みして画面に反映（IDが被るオンライン分は自動的に除外される）
+  await loadQuestionData();
+  await afterDataReady();
+  renderSettingsQVersion();
+
+  let msg = `✅ 取り込み完了（新規${added}件・更新${updatedCnt}件）`;
+  if (skipped) msg += `／不正データ${skipped}件をスキップ`;
+  showToast(msg, 4500);
+}
+
+async function clearCustomQuestions() {
+  if (!confirm('端末に保存した取り込み問題データをすべて削除します。よろしいですか？')) return;
+  await dbClear('customQuestions');
+  await loadQuestionData();
+  await afterDataReady();
+  renderSettingsQVersion();
+  showToast('🗑️ 取り込み問題データを削除しました', 3000);
+}
+
+// 設定画面の「問題データ」表示を更新（オンライン件数＋端末保存の取り込み件数）
+function renderSettingsQVersion() {
+  const el = document.getElementById('setting-q-version');
+  if (!el) return;
+  if (BUNDLED_QUESTIONS && BUNDLED_QUESTIONS.length > 0) {
+    let text = '問題データ: ver.' + (QUESTION_DATA_VERSION || '—') + '（' + BUNDLED_QUESTIONS.length + '問）';
+    if (CUSTOM_QUESTION_COUNT > 0) {
+      text += '　うち端末取り込み分 ' + CUSTOM_QUESTION_COUNT + '問';
+    }
+    el.textContent = text;
+  } else {
+    el.textContent = '問題データ: 読み込み中…';
+  }
+}
 
 function openManual() {
   const modal = document.getElementById('manual-modal');
@@ -3261,6 +3925,37 @@ function openManual() {
     frame.src = './manual.html';
   }
   modal.classList.add('show');
+}
+
+async function openReader() {
+  const modal = document.getElementById('reader-modal');
+  const frame = document.getElementById('reader-frame');
+  const off = document.getElementById('reader-offline');
+  modal.classList.add('show');
+  // オンライン専用：開くたびに接続を確認（キャッシュは使わない）
+  let ok = navigator.onLine !== false;
+  if (ok) {
+    try {
+      const res = await fetch('./yomimono.html?_=' + Date.now(), { method: 'HEAD', cache: 'no-store' });
+      ok = res.ok;
+    } catch (e) { ok = false; }
+  }
+  if (!ok) {
+    frame.style.display = 'none';
+    off.style.display = 'flex';
+    return;
+  }
+  off.style.display = 'none';
+  frame.style.display = '';
+  // このセッションで未読込のときだけ、時刻付きURLで最新版を取得（端末には保存しない）
+  if (frame.dataset.loaded !== '1') {
+    frame.src = './yomimono.html?_=' + Date.now();
+    frame.dataset.loaded = '1';
+  }
+}
+
+function closeReader() {
+  document.getElementById('reader-modal').classList.remove('show');
 }
 
 function closeManual() {
@@ -3277,7 +3972,7 @@ function goStats() {
 function renderStats() {
   const filtered = filterByExamType(state.questions);
   const totalQ = filtered.length;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
 
   // 進捗データ(filterに該当するもののみ)
   const filteredIds = new Set(filtered.map(q => q.id));
@@ -3305,15 +4000,14 @@ function renderStats() {
   } else {
     const dayCount = {};
     progressList.forEach(p => {
-      if (!p.lastAnsweredAt) return;
-      const d = p.lastAnsweredAt.slice(0, 10);
-      dayCount[d] = (dayCount[d] || 0) + 1;
+      // 1問につき、解いた日ごとに1回だけ数える(同日の解き直しは加算しない)
+      getAnswerDays(p).forEach(d => { dayCount[d] = (dayCount[d] || 0) + 1; });
     });
     const days = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
+      const key = localDateStr(d);
       days.push({ key, count: dayCount[key] || 0, label: `${d.getMonth() + 1}/${d.getDate()}` });
     }
     const maxC = Math.max(1, ...days.map(d => d.count));
@@ -3331,10 +4025,10 @@ function renderStats() {
   // 科目別進度率(レベル別積み上げグラフ)
   const subjStats = {};
   filtered.forEach(q => {
-    if (!subjStats[q.subject]) subjStats[q.subject] = { totalQ: 0, levelCounts: [0, 0, 0, 0, 0, 0], section: q.section };
+    if (!subjStats[q.subject]) subjStats[q.subject] = { totalQ: 0, levelCounts: [0, 0, 0, 0, 0, 0, 0], section: q.section };
     subjStats[q.subject].totalQ++;
     const p = state.progress[q.id];
-    const lv = p ? Math.min(p.intervalLevel || 0, 5) : 0;
+    const lv = levelBucket(p);
     subjStats[q.subject].levelCounts[lv]++;
   });
 
@@ -3353,8 +4047,8 @@ function renderStats() {
     subjList.innerHTML = '<div style="color:#7a8a99;text-align:center;padding:20px 0;">問題データがありません</div>';
   } else {
     // レベル別の色(進度を示す)
-    const levelColors = ['#e0e0e0', '#f44336', '#ffc107', '#8bc34a', '#4caf50', '#2196f3'];
-    const levelLabels = ['未学習', 'Lv1', 'Lv2', 'Lv3', 'Lv4', 'Lv5'];
+    const levelColors = LEVEL_COLORS;
+    const levelLabels = LEVEL_LABELS;
 
     // 凡例
     let legendHtml = '<div style="display:flex;flex-wrap:wrap;gap:8px;font-size:11px;color:#4a5a6a;margin-bottom:10px;padding:8px;background:#f5f7fa;border-radius:6px;">';
@@ -3366,8 +4060,8 @@ function renderStats() {
     let bodyHtml = '';
     subjEntries.forEach(([name, s]) => {
       // 進度スコア(0〜100):各レベルに重みをつけて加重平均
-      // Lv0=0, Lv1=10, Lv2=25, Lv3=45, Lv4=70, Lv5=100
-      const weights = [0, 10, 25, 45, 70, 100];
+      // 未出題=0, Lv0=0, Lv1=10, Lv2=25, Lv3=45, Lv4=70, Lv5=100
+      const weights = LEVEL_WEIGHTS;
       const score = s.levelCounts.reduce((sum, c, i) => sum + c * weights[i], 0) / s.totalQ;
       const scoreRounded = Math.round(score);
 
@@ -3397,10 +4091,10 @@ function renderStats() {
   const yearStats = {};
   filtered.forEach(q => {
     const key = `${q.examType}_${q.year}`;
-    if (!yearStats[key]) yearStats[key] = { totalQ: 0, levelCounts: [0, 0, 0, 0, 0, 0], examType: q.examType, year: q.year };
+    if (!yearStats[key]) yearStats[key] = { totalQ: 0, levelCounts: [0, 0, 0, 0, 0, 0, 0], examType: q.examType, year: q.year };
     yearStats[key].totalQ++;
     const p = state.progress[q.id];
-    const lv = p ? Math.min(p.intervalLevel || 0, 5) : 0;
+    const lv = levelBucket(p);
     yearStats[key].levelCounts[lv]++;
   });
 
@@ -3413,8 +4107,8 @@ function renderStats() {
   if (yearEntries.length === 0) {
     yearList.innerHTML = '<div style="color:#7a8a99;text-align:center;padding:20px 0;">問題データがありません</div>';
   } else {
-    const levelColors = ['#e0e0e0', '#f44336', '#ffc107', '#8bc34a', '#4caf50', '#2196f3'];
-    const weights = [0, 10, 25, 45, 70, 100];
+    const levelColors = LEVEL_COLORS;
+    const weights = LEVEL_WEIGHTS;
 
     let bodyHtml = '';
     yearEntries.forEach(s => {
@@ -3426,7 +4120,7 @@ function renderStats() {
       s.levelCounts.forEach((c, i) => {
         if (c === 0) return;
         const pct = (c / s.totalQ) * 100;
-        segHtml += `<div title="Lv${i}: ${c}問" style="height:100%;width:${pct}%;background:${levelColors[i]};display:flex;align-items:center;justify-content:center;font-size:10px;color:white;font-weight:600;">${c >= 3 ? c : ''}</div>`;
+        segHtml += `<div title="${LEVEL_LABELS[i]}: ${c}問" style="height:100%;width:${pct}%;background:${levelColors[i]};display:flex;align-items:center;justify-content:center;font-size:10px;color:white;font-weight:600;">${c >= 3 ? c : ''}</div>`;
       });
 
       bodyHtml += `
@@ -3444,18 +4138,17 @@ function renderStats() {
   }
 
   // 復習レベル分布
-  const intervalLabels = ['未学習(レベル0)', 'レベル1(1日後)', 'レベル2(3日後)', 'レベル3(7日後)', 'レベル4(21日後)', 'レベル5以上(60日〜)'];
-  const intervalCounts = [0, 0, 0, 0, 0, 0];
+  const intervalLabels = ['未出題(まだ解いていない)', 'レベル0(解答済み・未修得)', 'レベル1(1日後)', 'レベル2(3日後)', 'レベル3(7日後)', 'レベル4(21日後)', 'レベル5以上(45日〜)'];
+  const intervalCounts = [0, 0, 0, 0, 0, 0, 0];
   filtered.forEach(q => {
     const p = state.progress[q.id];
-    const lv = p ? Math.min(p.intervalLevel || 0, 5) : 0;
-    intervalCounts[lv]++;
+    intervalCounts[levelBucket(p)]++;
   });
   const totalI = intervalCounts.reduce((a, b) => a + b, 0) || 1;
   document.getElementById('stats-interval-list').innerHTML = intervalLabels.map((lbl, i) => {
     const c = intervalCounts[i];
     const pct = (c / totalI) * 100;
-    const colors = ['#cbd5dd', '#f44336', '#ffc107', '#8bc34a', '#4caf50', '#2196f3'];
+    const colors = LEVEL_COLORS;
     return `
       <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;">
         <span style="flex:1;min-width:120px;">${lbl}</span>
@@ -3579,9 +4272,19 @@ function startMutedMode() {
   showQuestion();
 }
 
-// 連続正解時の復習間隔(日)。末尾を長くして習得済み問題が頻繁に戻らないようにする
-// レベル1→1日, 2→3日, 3→7日, 4→21日, 5→60日, 6→150日, 7→365日
-const INTERVALS = [1, 3, 7, 21, 60, 150, 365];
+// 進捗レベルの区分（0=未出題 / 1=Lv0 / 2=Lv1 … 6=Lv5）
+// 「未出題（一度も解答していない）」と「Lv0（解答済みだが未修得・リセット）」を区別する
+const LEVEL_LABELS = ['未出題', 'Lv0', 'Lv1', 'Lv2', 'Lv3', 'Lv4', 'Lv5'];
+const LEVEL_COLORS = ['#e0e0e0', '#8e24aa', '#f44336', '#ffc107', '#8bc34a', '#4caf50', '#2196f3'];
+const LEVEL_WEIGHTS = [0, 0, 10, 25, 45, 70, 100];
+function levelBucket(p) {
+  if (!p) return 0; // 進捗レコードなし＝未出題
+  return 1 + Math.min(p.intervalLevel || 0, 5);
+}
+
+// 連続正解時の復習間隔(日)。受験日から逆算し、最後の復習が本番の何か月も前にならないよう末尾を90日までにしている
+// レベル1→1日, 2→3日, 3→7日, 4→21日, 5→45日, 6→75日, 7→90日
+const INTERVALS = [1, 3, 7, 21, 45, 75, 90];
 
 // 間隔に±15%のゆらぎを与え、同じ日に復習が集中する「なだれ」を防ぐ
 function fuzz(days) {
@@ -3595,8 +4298,10 @@ function reviewPriority(q, todayD) {
   const p = state.progress[q.id];
   if (!p) return -Infinity;
   const danger = p.danger ? 1000 : 0;
-  const dueD = p.nextReviewAt ? new Date(p.nextReviewAt) : todayD;
-  const overdue = Math.max(0, Math.round((todayD - dueD) / 86400000)); // 超過日数
+  // 日付だけ(ローカル0時)で比較し、時刻やタイムゾーンによる1日のずれを防ぐ
+  const _t0 = new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate());
+  const dueD = p.nextReviewAt ? new Date(p.nextReviewAt + 'T00:00:00') : _t0;
+  const overdue = Math.max(0, Math.round((_t0 - dueD) / 86400000)); // 超過日数
   const fragile = INTERVALS.length - Math.min(p.intervalLevel || 0, INTERVALS.length);
   const importance = q.weight || 1; // 頻出・傾向問題に付与予定（未指定は1）
   return (danger + overdue * 3 + fragile) * importance;
@@ -3609,7 +4314,7 @@ function startMode(mode, subject) {
   state.skipProgressSave = false;
 
   let queue = filterByExamType(state.questions);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
 
   if (mode === 'review') {
     queue = queue.filter(q => {
@@ -3685,9 +4390,9 @@ function showQuestion() {
   const lvEl = document.getElementById('q-level-badge');
   if (lvEl) {
     const p = state.progress[q.id];
-    const lv = p ? Math.min(p.intervalLevel || 0, 5) : 0;
-    const lvLabels = ['未学習', 'Lv1', 'Lv2', 'Lv3', 'Lv4', 'Lv5'];
-    const lvColors  = ['#9aa8b5', '#f44336', '#ffc107', '#8bc34a', '#4caf50', '#2196f3'];
+    const lv = levelBucket(p);
+    const lvLabels = LEVEL_LABELS;
+    const lvColors  = ['#9aa8b5', ...LEVEL_COLORS.slice(1)];
     lvEl.textContent = lvLabels[lv];
     lvEl.style.background = lvColors[lv];
     lvEl.style.display = 'inline-block';
@@ -3756,6 +4461,17 @@ function showQuestion() {
   document.getElementById('action-buttons').style.display = 'flex';
   document.getElementById('submit-confident').disabled = true;
   document.getElementById('submit-unsure').disabled = true;
+  // 「自信あり／あいまい」の区別はレベル3以上のみ。未出題・Lv1・Lv2は「解答」ボタンのみ
+  {
+    const _prog = state.progress[q.id];
+    const _lv = _prog ? (_prog.intervalLevel || 0) : 0;
+    const _useConf = _lv >= 3;
+    const _bc = document.getElementById('submit-confident');
+    const _bu = document.getElementById('submit-unsure');
+    _bc.style.display = _useConf ? '' : 'none';
+    _bu.textContent = _useConf ? 'あいまい 解答' : '解答';
+    _bu.className = _useConf ? 'btn outline' : 'btn';
+  }
   document.getElementById('next-btn').style.display = 'none';
   document.getElementById('mute-btn').style.display = 'none';
   document.getElementById('back-to-list-btn').style.display = 'none';
@@ -3813,7 +4529,7 @@ function showQuestion() {
 function backToList() {
   const mode = state.currentMode;
   if (mode === 'search') {
-    showScreen('search', '問題検索', '問題文・選択肢から検索');
+    showScreen('search', '問題検索', 'キーワード・年度・問題番号から検索');
   } else if (mode === 'memo_review') {
     goMemoList();
   } else if (mode === 'muted_review') {
@@ -3929,6 +4645,23 @@ function skipAnswer() {
   }
 }
 
+// 端末のローカル時刻での日付文字列(YYYY-MM-DD)。toISOString()はUTCなので日本時間0〜9時に前日扱いになるため使わない
+function localDateStr(d) {
+  d = d || new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// 問題が「解いた日」として持つローカル日付の一覧(重複なし)。
+// answerDays が無い旧データは、最終解答日時(UTCのISO文字列)をローカル日付に直して1件として扱う
+function getAnswerDays(p) {
+  if (Array.isArray(p.answerDays)) return p.answerDays;
+  if (p.lastAnsweredAt) {
+    const d = new Date(p.lastAnsweredAt);
+    if (!isNaN(d)) return [localDateStr(d)];
+  }
+  return [];
+}
+
 // grade: 'easy'(自信あり正解) 'good'(あいまい正解) 'again'(不正解) 'trap'(自信あり不正解=危険)
 // 後方互換: 本試験モード等から isCorrect(真偽値)/スキップで呼ばれた場合はグレードに変換する
 async function saveProgress(qid, grade, isSkipped = false) {
@@ -3949,6 +4682,11 @@ async function saveProgress(qid, grade, isSkipped = false) {
   };
 
   cur.lastAnsweredAt = today.toISOString();
+  // その日に初めて解いたときだけ「解いた日」を追加(同じ日に何度解き直しても1回分)
+  const _todayLocal = localDateStr(today);
+  const _days = getAnswerDays(cur).slice();
+  if (!_days.includes(_todayLocal)) _days.push(_todayLocal);
+  cur.answerDays = _days.slice(-400); // 肥大化防止(約1年分)
   // 旧来の集計との互換のため lastResult は correct/incorrect/skipped のまま残し、
   // 自信度込みの詳細は lastGrade に持たせる
   cur.lastResult = isSkipped ? 'skipped'
@@ -3987,7 +4725,7 @@ async function saveProgress(qid, grade, isSkipped = false) {
 
   const next = new Date(today);
   next.setDate(next.getDate() + nextDays);
-  cur.nextReviewAt = next.toISOString().slice(0, 10);
+  cur.nextReviewAt = localDateStr(next);
 
   state.progress[qid] = cur;
   await dbPut('progress', cur);

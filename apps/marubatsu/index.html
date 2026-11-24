@@ -238,6 +238,11 @@
       <div class="stat-box"><div class="num" id="st-due" style="color:#ff9800;">0</div><div class="lbl">復習対象</div></div>
     </div>
 
+    <div style="display:flex;align-items:center;gap:10px;margin:0 0 12px;">
+      <button class="btn outline" id="sync-btn" onclick="runSync('button')" style="padding:8px 14px;font-size:calc(13px*var(--fs));white-space:nowrap;">🔄 同期</button>
+      <div id="sync-status" style="font-size:calc(12px*var(--fs));color:var(--sub);line-height:1.5;flex:1;"></div>
+    </div>
+
     <button class="menu-btn" onclick="goDailySetup()">
       <span class="ico">📅</span><span class="label">今日の演習</span>
       <div class="desc">全科目から分散して未出題優先で出題</div>
@@ -337,12 +342,12 @@
     </div>
     <div class="card">
       <h2>📈 復習の進度</h2>
-      <div style="font-size:calc(13px*var(--fs));color:var(--sub);margin-bottom:12px;">忘却曲線レベルごとの問題数(数値が高いほど習得が進んでいる)</div>
+      <div style="font-size:calc(13px*var(--fs));color:var(--sub);margin-bottom:12px;">忘却曲線レベルごとの問題数(数値が高いほど習得が進んでいる)。「未出題」は一度も解いていない問題、「レベル0」は解いたが未修得(不正解でリセット)の問題です。</div>
       <div id="stats-interval-list"></div>
     </div>
     <div class="card">
       <h2>📚 科目別 学習進度</h2>
-      <div style="font-size:calc(12px*var(--fs));color:var(--sub);margin-bottom:10px;">忘却曲線レベル別の問題分布。色が右に進むほど習得が進んでいます。</div>
+      <div style="font-size:calc(12px*var(--fs));color:var(--sub);margin-bottom:10px;">忘却曲線レベル別の問題分布。灰=未出題、紫=Lv0(解答済み・未修得)。色が右に進むほど習得が進んでいます。</div>
       <div id="stats-subject-legend" style="margin-bottom:10px;"></div>
       <div id="subject-stats"><div class="empty-state">まだ記録がありません</div></div>
     </div>
@@ -358,7 +363,26 @@
           <div class="lbl">問題データについて</div>
           <div class="desc">起動時に自動で marubatsu_questions.json を読み込みます（オンライン接続必須）</div>
         </div>
-
+      </div>
+      <div style="font-size:calc(12px*var(--fs));color:var(--sub);margin:10px 0;line-height:1.7;">
+        このアプリはオンライン専用ですが、JSONファイルで問題を追加できます。<br>
+        取り込んだファイルは端末に保存されるため、毎回取り込み直す必要はありません。<br>
+        オンラインで配信中の問題とID（id）が重複した場合は、常にオンライン側の内容が優先されます。
+      </div>
+      <input type="file" id="mb-import-questions-file" accept="application/json,.json" style="display:none;" onchange="mbHandleImportQuestionsFile(event)">
+      <div class="setting-row">
+        <div>
+          <div class="lbl">JSONファイルを取り込む</div>
+          <div class="desc">marubatsu_questions.jsonと同じ形式（{"questions":[...]}）</div>
+        </div>
+        <button class="btn" onclick="mbTriggerImportQuestionsFile()" style="padding:8px 14px;font-size:calc(13px*var(--fs));">📥 取り込む</button>
+      </div>
+      <div class="setting-row">
+        <div>
+          <div class="lbl">端末保存分を削除</div>
+          <div class="desc">取り込んだ問題データ（端末保存分）のみ削除します</div>
+        </div>
+        <button class="btn danger" onclick="mbClearCustomQuestions()" style="padding:8px 14px;font-size:calc(13px*var(--fs));">🗑️ 削除</button>
       </div>
     </div>
     <div class="card">
@@ -366,6 +390,26 @@
       <div style="font-size:calc(13px*var(--fs));color:var(--sub);margin-bottom:10px;">チェックした年度の問題は今日の演習・科目別演習・復習モードのすべてで表示されません。</div>
       <div id="mb-settings-year-list" style="max-height:360px;overflow-y:auto;">
         <div style="color:var(--sub);text-align:center;padding:16px;">読み込み中...</div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>☁️ 同期・取り込み（スプレッドシート）</h2>
+      <div style="font-size:calc(12px*var(--fs));color:var(--sub);line-height:1.7;margin-bottom:10px;">
+        ホーム画面で設定した<b>学校・学生番号</b>の解いた記録を、先生が管理するスプレッドシートと同期します。
+        2台の端末で続きを解くときや、機種変更のときに使います。
+      </div>
+      <input type="password" id="restore-key" placeholder="あなたのダウンロードキー（例 ABCD-EFGH-JKMN）" autocomplete="off" autocapitalize="off" spellcheck="false"
+             style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;font-size:calc(14px*var(--fs));margin-bottom:10px;">
+      <label style="display:flex;align-items:center;gap:8px;font-size:calc(13px*var(--fs));margin-bottom:6px;"><input type="checkbox" id="restore-save-key" onchange="onSaveKeyToggle(this)"> ダウンロードキーをこの端末に保存する</label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:calc(13px*var(--fs));margin-bottom:10px;"><input type="checkbox" id="restore-autosync" onchange="onAutoSyncToggle(this)"> アプリ起動時に自動で同期する</label>
+      <button class="btn" id="restore-btn" onclick="restoreFromSheet()" style="width:100%;">📥 スプレッドシートから取り込む（確認あり）</button>
+      <div id="restore-status" style="font-size:calc(12px*var(--fs));color:var(--sub);margin-top:8px;line-height:1.7;min-height:1em;"></div>
+      <div style="font-size:calc(12px*var(--fs));color:#c0504d;margin-top:8px;line-height:1.7;">
+        ※ キーは先生から渡された<b>あなた専用のキー</b>です（他の人のキーでは使えません）。<br>
+        ※ 保存したキーはこの端末のブラウザ内に残ります。<b>共用の端末では保存しないでください。</b><br>
+        ※ 新しい端末では、<b>問題を解く前に</b>同期してください。先に解くと、その問題のシート側の記録が端末の値で上書きされます。<br>
+        ※ 端末を切り替えるときは、ホームの「🔄 同期」を押してから解き始めてください（自動同期は起動時のみです）。2台で同じ問題を続けて解くと、後から送られた記録が優先されます。<br>
+        ※ このアプリ（〇×問題集）にはメモ・出題除外の機能が無いため、同期の対象は解いた記録のみです。
       </div>
     </div>
     <div class="card">
@@ -377,7 +421,6 @@
         </div>
         <button class="btn danger" onclick="resetProgress()">🗑️ 削除</button>
       </div>
-      <div style="font-size:calc(12px*var(--fs));color:var(--sub);margin-top:10px;line-height:1.7;">バックアップ（書き出し・復元）は、統合ホーム画面下部の「学習データのバックアップ」からまとめて行えます。</div>
     </div>
   </div>
 
@@ -413,6 +456,7 @@
 /* ====== 状態 ====== */
 let ALL = [];               // 全問題
 let MB_DATA_VERSION = null;  // 取り込んだ問題データのバージョン
+let CUSTOM_QUESTION_COUNT = 0; // 端末に保存済みのJSON取り込み分のうち、実際に採用された件数（オンライン分と重複しなかった件数）
 let YEAR_LABELS = {};       // year値 → 表示ラベル
 let PROGRESS = {};          // questionId -> {questionId,correctCount,incorrectCount,intervalLevel,lastResult,lastAnsweredAt,nextReviewAt}
 let MB_EXCLUDE_YEARS = [];  // 除外年度キー配列 (例: ["hari_kyu_30","amashi_30"])
@@ -420,8 +464,29 @@ let dailyCount = 20;        // 今日の演習の問題数
 
 let session = null;         // {queue, idx, correct, wrong, answered, mode, subject}
 
-const INTERVALS = [2, 3, 7, 14, 30]; // 連続正解時の日数（Lv1→2日, Lv2→3日, Lv3→7日, Lv4→14日, Lv5→30日）
-function todayStr(){ return new Date().toISOString().slice(0,10); }
+const INTERVALS = [1, 3, 7, 21, 45, 75, 90]; // 連続正解時の日数（Lv1→1日, Lv2→3日, Lv3→7日, Lv4→21日, Lv5→45日, Lv6→75日, Lv7→90日）
+// 端末のローカル時刻での日付文字列(YYYY-MM-DD)。toISOString()はUTCなので日本時間0〜9時に前日扱いになるため使わない
+function localDateStr(d){
+  d = d || new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function todayStr(){ return localDateStr(); }
+// 問題が「解いた日」として持つローカル日付の一覧(重複なし)。旧データは最終解答日時から1件復元する
+function getAnswerDays(p){
+  if(Array.isArray(p.answerDays)) return p.answerDays;
+  if(p.lastAnsweredAt){ const d=new Date(p.lastAnsweredAt); if(!isNaN(d)) return [localDateStr(d)]; }
+  return [];
+}
+
+// 進捗レベルの区分（0=未出題 / 1=Lv0 / 2=Lv1 … 8=Lv7）
+// 「未出題（一度も解答していない）」と「Lv0（解答済みだが未修得・不正解でリセット）」を区別する
+const LEVEL_SHORT = ['未出題','Lv0','Lv1','Lv2','Lv3','Lv4','Lv5','Lv6','Lv7'];
+const LEVEL_COLORS = ['#e0e0e0','#8e24aa','#f44336','#ffc107','#8bc34a','#4caf50','#2196f3','#1976d2','#0d47a1'];
+const LEVEL_WEIGHTS = [0,0,14,29,43,57,71,86,100];
+function levelBucket(p){
+  if(!p) return 0; // 進捗レコードなし＝未出題
+  return 1 + Math.min(p.intervalLevel||0, INTERVALS.length);
+}
 
 /* ====== 進捗（忘却曲線）: IndexedDB 'progress' ストアに保存 ====== */
 function pgGetAll(){
@@ -455,17 +520,22 @@ async function saveProgress(qid, isCorrect){
   const today = new Date();
   const cur = PROGRESS[qid] || { questionId:qid, correctCount:0, incorrectCount:0, intervalLevel:0, lastResult:null, lastAnsweredAt:null, nextReviewAt:null };
   cur.lastAnsweredAt = today.toISOString();
+  // その日に初めて解いたときだけ「解いた日」を追加(同日の解き直しは1回分)
+  const _todayLocal = localDateStr(today);
+  const _days = getAnswerDays(cur).slice();
+  if(!_days.includes(_todayLocal)) _days.push(_todayLocal);
+  cur.answerDays = _days.slice(-400);
   cur.lastResult = isCorrect ? 'correct' : 'incorrect';
   if(isCorrect){
     cur.correctCount++;
     cur.intervalLevel = Math.min(cur.intervalLevel + 1, INTERVALS.length);
     const days = INTERVALS[cur.intervalLevel - 1];
     const next = new Date(today); next.setDate(next.getDate()+days);
-    cur.nextReviewAt = next.toISOString().slice(0,10);
+    cur.nextReviewAt = localDateStr(next);
   }else{
     cur.incorrectCount++;
     cur.intervalLevel = 0;
-    cur.nextReviewAt = today.toISOString().slice(0,10); // 当日中に再出題
+    cur.nextReviewAt = localDateStr(today); // 当日中に再出題
   }
   PROGRESS[qid] = cur;
   await pgPut(cur);
@@ -479,7 +549,7 @@ let _mbdb = null;
 
 function mbOpenDB(){
   return new Promise((resolve, reject)=>{
-    const req = indexedDB.open(MB_DB, 4); // v4: questionData ストア追加（取り込んだ問題を端末保存）
+    const req = indexedDB.open(MB_DB, 5); // v5: customQuestions ストア追加（JSON取り込み分を端末に保存し、次回以降も再利用）
     req.onupgradeneeded = (e)=>{
       const db = e.target.result;
       // 旧バージョンの questions ストアは使わない
@@ -488,6 +558,8 @@ function mbOpenDB(){
       if(!db.objectStoreNames.contains('progress')) db.createObjectStore('progress', { keyPath:'questionId' });
       // questionData は廃止（毎回fetchするためIndexedDB保存不要）
       if(db.objectStoreNames.contains('questionData')) db.deleteObjectStore('questionData');
+      // JSONファイルから取り込んだ問題データ（端末に保存し、次回起動時も再取り込み不要）
+      if(!db.objectStoreNames.contains('customQuestions')) db.createObjectStore('customQuestions', { keyPath:'id' });
     };
     req.onsuccess = ()=>{
       const db = req.result;
@@ -519,6 +591,12 @@ function mbPut(store, value){
     r.onsuccess=()=>resolve(); r.onerror=()=>reject(r.error);
   });
 }
+function mbClear(store){
+  return new Promise((resolve,reject)=>{
+    const tx=_mbdb.transaction(store,'readwrite'); const r=tx.objectStore(store).clear();
+    r.onsuccess=()=>resolve(); r.onerror=()=>reject(r.error);
+  });
+}
 
 // 起動時に同フォルダの marubatsu_questions.json と marubatsu_questions-2.json を読み込む（端末には保存しない）。
 // ・marubatsu_questions.json … 必須。無ければ起動失敗。
@@ -544,21 +622,53 @@ async function mbFetchFile(name, required){
   }
 }
 
+// 正誤判定の文字ゆれ対策：正誤ボタンは「○」(U+25CB)との厳密一致で判定するため、
+// 全角の「〇」(U+3007・漢数字ゼロ)のまま取り込まれると常に不正解判定になってしまう。
+// 取り込み時に一律で正規化しておく（他の項目は変更しない）。
+function mbNormalizeCorrectAnswer(q){
+  if(q && q.correctAnswer === '〇') q.correctAnswer = '○';
+  return q;
+}
+
 async function mbLoadQuestions(){
   try{
     const primary = await mbFetchFile('marubatsu_questions.json', true);
     if(!primary || primary.questions.length === 0) throw new Error('データが空です');
     const extra = await mbFetchFile('marubatsu_questions-2.json', false);
 
-    const merged = primary.questions.slice();
+    const merged = primary.questions.map(mbNormalizeCorrectAnswer);
     if(extra && extra.questions.length){
       const seen = new Set(merged.map(q => q && q.id).filter(x => x != null));
       extra.questions.forEach(q => {
         if(q && q.id != null && seen.has(q.id)) return;
-        merged.push(q);
+        merged.push(mbNormalizeCorrectAnswer(q));
       });
     }
+
+    // 端末に保存済みの取り込みデータ（JSONインポート分）をマージ。
+    // オンライン取得分（marubatsu_questions.json / -2.json）とIDが被る場合は、
+    // 常にオンライン側を優先する（＝取り込み分はスキップ）。
+    let customCount = 0;
+    try{
+      if(_mbdb){
+        const custom = await mbGetAll('customQuestions');
+        if(custom && custom.length){
+          const seenAll = new Set(merged.map(q => q && q.id).filter(x => x != null));
+          custom.forEach(q=>{
+            if(!q || q.id == null) return;
+            if(seenAll.has(q.id)) return; // オンライン側優先。重複はスキップ
+            seenAll.add(q.id);
+            merged.push(mbNormalizeCorrectAnswer(q));
+            customCount++;
+          });
+        }
+      }
+    }catch(e){
+      console.warn('customQuestions の読み込みをスキップしました:', e.message);
+    }
+
     ALL = merged;
+    CUSTOM_QUESTION_COUNT = customCount;
     MB_DATA_VERSION = [primary.version, extra && extra.version].filter(Boolean).join('+') || null;
     return true;
   }catch(e){
@@ -567,7 +677,72 @@ async function mbLoadQuestions(){
   }
 }
 
-// mbShowImportPrompt / mbHideImportPrompt / mbReimport は廃止（fetch方式に移行）
+//=========================================================
+// JSONファイルからの問題取り込み（オフライン端末保存・オンライン優先マージ）
+//=========================================================
+// 取り込んだJSONファイルはIndexedDB（customQuestionsストア）に保存されるため、
+// 一度取り込めば次回以降アプリを開いたときも再取り込み不要でそのまま使える。
+// オンラインのmarubatsu_questions.json/marubatsu_questions-2.jsonとIDが被る場合は、常にオンライン側を優先する。
+
+function mbTriggerImportQuestionsFile(){
+  const input = document.getElementById('mb-import-questions-file');
+  if(input){ input.value=''; input.click(); }
+}
+
+async function mbHandleImportQuestionsFile(event){
+  const file = event && event.target && event.target.files && event.target.files[0];
+  if(!file) return;
+  await mbImportCustomQuestionsFromFile(file);
+}
+
+async function mbImportCustomQuestionsFromFile(file){
+  let json;
+  try{
+    const text = await file.text();
+    json = JSON.parse(text);
+  }catch(e){
+    toast('⚠️ JSONファイルの読み込みに失敗しました', 4000);
+    return;
+  }
+  const arr = json && Array.isArray(json.questions) ? json.questions
+            : (Array.isArray(json) ? json : null);
+  if(!arr || arr.length === 0){
+    toast('⚠️ questions配列が見つかりませんでした', 4000);
+    return;
+  }
+
+  let added = 0, updatedCnt = 0, skipped = 0;
+  for(const q of arr){
+    if(!q || q.id == null){ skipped++; continue; }
+    try{
+      const existing = await mbGet('customQuestions', q.id);
+      await mbPut('customQuestions', q);
+      if(existing) updatedCnt++; else added++;
+    }catch(e){
+      skipped++;
+    }
+  }
+
+  // 再読み込みして画面に反映（IDが被るオンライン分は自動的に除外される）
+  await mbLoadQuestions();
+  buildFilters();
+  refreshHome();
+  mbRenderDataInfo();
+
+  let msg = `✅ 取り込み完了（新規${added}件・更新${updatedCnt}件）`;
+  if(skipped) msg += `／不正データ${skipped}件をスキップ`;
+  toast(msg, 4500);
+}
+
+async function mbClearCustomQuestions(){
+  if(!confirm('端末に保存した取り込み問題データをすべて削除します。よろしいですか？')) return;
+  await mbClear('customQuestions');
+  await mbLoadQuestions();
+  buildFilters();
+  refreshHome();
+  mbRenderDataInfo();
+  toast('🗑️ 取り込み問題データを削除しました', 3000);
+}
 
 //=========================================================
 // 学習データ自動送信（GAS Webアプリへ）
@@ -576,10 +751,6 @@ async function mbLoadQuestions(){
 //   (kokushiアプリと同じURLでOK。appフィールドで区別されます)
 const SYNC_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyUuD4I3pZS9yR5iHwwTRrsKuzF5cAvuYb7Zu-QehmqRTkNAct2RGWhCmWg8ovDkvmX/exec';
 const SYNC_APP_ID = 'marubatsu';
-const SYNC_INITIAL_META_KEY = 'syncInitialDone';
-// full送信の「版」。この数字を上げると、全端末が次回起動時に一度だけfullを再送する。
-// （旧版は value:true を保存していたため、それも「版が古い」として自動的に再送対象になる）
-const SYNC_FULL_VERSION = 2;
 
 // 端末ID（UUID）：ホーム画面(index.html)側と同じキーを使い、未生成なら自分で生成する
 const DEVICE_ID_KEY = 'suite_device_uuid';
@@ -621,18 +792,6 @@ function getStudentInfo() {
   return { school, studentNo, deviceId: getOrCreateDeviceId() };
 }
 
-async function isInitialSyncDone() {
-  try {
-    const rec = await mbGet('meta', SYNC_INITIAL_META_KEY);
-    if (!rec || !rec.value) return false;
-    // 保存されている版が現行版と一致するときだけ「送信済み」とみなす
-    return rec.value === SYNC_FULL_VERSION;
-  } catch (e) { return false; }
-}
-async function markInitialSyncDone() {
-  try { await mbPut('meta', { key: SYNC_INITIAL_META_KEY, value: SYNC_FULL_VERSION }); } catch (e) {}
-}
-
 //=========================================================
 // 送信キュー（オフライン・送信失敗時に備えた再送のしくみ）
 //=========================================================
@@ -645,8 +804,10 @@ function saveSyncQueue(q) {
   try { localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(q)); } catch (e) {}
 }
 
+let _localChangeSeq = 0; // 端末側で送信対象の変更が起きるたびに増える（同期中に端末が変わったかの判定用）
 function enqueueSync(payload) {
   if (!SYNC_ENDPOINT || SYNC_ENDPOINT.indexOf('★') !== -1) return false; // 未設定時は何もしない
+  _localChangeSeq++;
   const student = getStudentInfo();
   const record = Object.assign({
     app: SYNC_APP_ID,
@@ -697,7 +858,6 @@ async function flushSyncQueue() {
           method: 'POST', mode: 'no-cors', keepalive: true,
           headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body)
         });
-        if (rec.type === 'full') await markInitialSyncDone();
         q = removeFromSyncQueue(rec);
       } catch (e) {
         break;
@@ -709,32 +869,14 @@ async function flushSyncQueue() {
 }
 window.addEventListener('online', flushSyncQueue);
 
-// 初回のみ：これまでの全進捗データをまとめて送信（呼ぶのはアプリ起動時だけ）
-let _fullSyncStarted = false;
-async function syncFullData() {
-  if (_fullSyncStarted) return;
-  _fullSyncStarted = true;
-  try {
-    const progressList = await pgGetAll();
-    const queued = enqueueSync({ type: 'full', progress: progressList });
-    // キューに積んだ時点で初回完了とみなす（キューはlocalStorageに残るので取りこぼしはない）。
-    // 送信完了まで待つと、その間の解答が「初回未完了」と判定されfullが重複送信されてしまう。
-    if (queued) await markInitialSyncDone();
-  } catch (e) {
-    _fullSyncStarted = false;
-    console.error('sync(full)エラー:', e);
-  }
-}
-
-// 起動時に1回だけ呼ぶ：未送信のキューを再送し、初回なら全データを送る
+// 起動時に1回だけ呼ぶ：前回送りきれなかった未送信キューを再送する
+// （端末内の全データを送る「初回全送信」は廃止。解答のたびに差分を送る）
 async function syncOnStartup() {
-  try {
-    if (!(await isInitialSyncDone())) await syncFullData();
-    else flushSyncQueue();
-  } catch (e) { console.error('sync(startup)エラー:', e); }
+  try { flushSyncQueue(); }
+  catch (e) { console.error('sync(startup)エラー:', e); }
 }
 
-// 1問解いた直後に呼ぶ（full は起動時に送信済みなので、ここでは常に差分のみ）
+// 1問解いた直後に呼ぶ（常に差分のみ）
 async function syncOneAnswer(qid) {
   try {
     enqueueSync({ type: 'answer', progress: PROGRESS[qid] || null });
@@ -771,7 +913,7 @@ async function loadData(){
   if(_ov) _ov.remove();
   buildFilters();
   refreshHome();
-  syncOnStartup(); // 初回なら全学習データを送信／それ以外は未送信分の再送を試みる
+  startupSyncThenUpload(); // 自動同期オンなら先にシートから取り込み → 初回なら全学習データを送信／それ以外は未送信分の再送
 }
 
 // 自動のオンライン確認は行わない（データは取り込み済み・オフラインで動作）。
@@ -808,10 +950,21 @@ function showScreen(id){
   window.scrollTo(0,0);
 }
 function openStats(){ refreshStats(); showScreen('stats'); }
+// 設定画面の「問題データ」表示を更新（オンライン件数＋端末保存の取り込み件数）
+function mbRenderDataInfo(){
+  const el = document.getElementById('mb-data-info');
+  if(!el) return;
+  if(ALL && ALL.length){
+    let text = '問題データ: ver.' + (MB_DATA_VERSION || '—') + '（' + ALL.length + '問）';
+    if(CUSTOM_QUESTION_COUNT > 0) text += '　うち端末取り込み分 ' + CUSTOM_QUESTION_COUNT + '問';
+    el.textContent = text;
+  }else{
+    el.textContent = '問題データ: 読み込み中…';
+  }
+}
 function openSettings(){
   showScreen('settings');
-  const el = document.getElementById('mb-data-info');
-  if(el) el.textContent = '問題データ: ' + (ALL && ALL.length ? ('ver.' + (MB_DATA_VERSION || '—') + '（' + ALL.length + '問）') : '読み込み中…');
+  mbRenderDataInfo();
   mbRenderYearList();
 }
 function goSubjectSelect(){ showScreen('subjects'); }
@@ -899,8 +1052,8 @@ function renderQuestion(){
   const yLabel = YEAR_LABELS[String(q.year)] || q.year;
   // 忘却曲線レベルのバッジ
   const p = PROGRESS[q.id];
-  const lv = p ? Math.min(p.intervalLevel||0,5) : 0;
-  const lvLabels=['未学習','Lv1','Lv2','Lv3','Lv4','Lv5'];
+  const lv = levelBucket(p);
+  const lvLabels = LEVEL_SHORT;
   meta.innerHTML =
     `<span class="badge ${examCls}">${examLabel}</span>`+
     `<span class="badge subject">${q.subject}</span>`+
@@ -987,14 +1140,14 @@ function refreshStats(){
   document.getElementById('all-mastered').textContent = mastered;
   document.getElementById('all-due').textContent = due;
 
-  const levelColors=['#e0e0e0','#f44336','#ffc107','#8bc34a','#4caf50','#2196f3'];
-  const levelLabels=['未学習(レベル0)','レベル1(2日後)','レベル2(3日後)','レベル3(7日後)','レベル4(14日後)','レベル5(30日後)'];
-  // 全問をレベル別に集計（未学習=PROGRESSに無い or intervalLevel 0）
-  const counts=[0,0,0,0,0,0];
-  ALL.forEach(q=>{ const p=PROGRESS[q.id]; const lv=p?Math.min(p.intervalLevel||0,5):0; counts[lv]++; });
+  const levelColors = LEVEL_COLORS;
+  const levelLabels=['未出題(まだ解いていない)','レベル0(解答済み・未修得)','レベル1(1日後)','レベル2(3日後)','レベル3(7日後)','レベル4(21日後)','レベル5(45日後)','レベル6(75日後)','レベル7(90日後)'];
+  // 全問をレベル別に集計（未出題=PROGRESSに無い / Lv0=解答済みでintervalLevel 0）
+  const counts=[0,0,0,0,0,0,0,0,0];
+  ALL.forEach(q=>{ counts[levelBucket(PROGRESS[q.id])]++; });
   const maxc = Math.max(1, ...counts);
   let il='';
-  for(let i=0;i<6;i++){
+  for(let i=0;i<levelLabels.length;i++){
     const pct = Math.round(counts[i]/maxc*100);
     il += `<div class="interval-row"><div class="il-lbl">${levelLabels[i]}</div>`+
           `<div class="il-bar"><i style="width:${pct}%;background:${levelColors[i]};"></i></div>`+
@@ -1003,7 +1156,7 @@ function refreshStats(){
   document.getElementById('stats-interval-list').innerHTML = il;
 
   // 凡例
-  const shortLabels=['未学習','Lv1','Lv2','Lv3','Lv4','Lv5'];
+  const shortLabels = LEVEL_SHORT;
   let legend='<div style="display:flex;flex-wrap:wrap;gap:10px;font-size:calc(11px*var(--fs));color:#555;">';
   shortLabels.forEach((lbl,i)=>{ legend+=`<span style="display:inline-flex;align-items:center;gap:3px;"><span style="display:inline-block;width:10px;height:10px;background:${levelColors[i]};border-radius:2px;"></span>${lbl}</span>`; });
   legend+='</div>';
@@ -1012,11 +1165,11 @@ function refreshStats(){
   // 科目別 学習進度（レベル別積み上げ）
   const subjStats={};
   ALL.forEach(q=>{
-    if(!subjStats[q.subject]) subjStats[q.subject]={ totalQ:0, levelCounts:[0,0,0,0,0,0] };
-    const p=PROGRESS[q.id]; const lv=p?Math.min(p.intervalLevel||0,5):0;
+    if(!subjStats[q.subject]) subjStats[q.subject]={ totalQ:0, levelCounts:[0,0,0,0,0,0,0,0,0] };
+    const lv=levelBucket(PROGRESS[q.id]);
     subjStats[q.subject].levelCounts[lv]++; subjStats[q.subject].totalQ++;
   });
-  const weights=[0,20,40,60,80,100];
+  const weights = LEVEL_WEIGHTS;
   const box=document.getElementById('subject-stats');
   const subs=Object.keys(subjStats).sort((a,b)=>{
     const sa=subjStats[a].levelCounts.reduce((s,c,i)=>s+c*weights[i],0)/subjStats[a].totalQ;
@@ -1058,7 +1211,13 @@ function mbRenderYearList(){
   // year が数値の問題から年度一覧を取得
   const yearSet = new Set();
   ALL.forEach(q=>{ if(!isNaN(Number(q.year))) yearSet.add(`${q.examType}_${Number(q.year)}`); });
-  const years = Array.from(yearSet).sort();
+  // 「試験種別」順に並べ、同じ種別の中では回数を数値で昇順にする（文字列順だと 1,10,11,…,2 になるため）
+  const years = Array.from(yearSet).sort((a,b)=>{
+    const ia=a.lastIndexOf('_'), ib=b.lastIndexOf('_');
+    const ta=a.slice(0,ia), tb=b.slice(0,ib);
+    if(ta!==tb) return ta<tb ? -1 : 1;
+    return Number(a.slice(ia+1)) - Number(b.slice(ib+1));
+  });
   if(years.length===0){
     container.innerHTML = '<div style="color:var(--sub);text-align:center;padding:16px;">年度データがありません</div>';
     return;
@@ -1118,13 +1277,288 @@ async function resetProgress(){
   toast('学習履歴をリセットしました');
 }
 
+/* ====== スプレッドシートからの取り込み・同期（2台の端末を最新に保つ） ======
+   ・認証は「学生ごとのダウンロードキー」（閲覧キーとは別）。設定画面で入力し、「この端末に保存」で入力不要にできる。
+   ・取り込む対象は、ホーム画面(index.html)で設定した 学校・学生番号 の、このアプリ分の解いた記録のみ。
+   ・マージ：最終解答日時が新しい方を採用し、解いた日は両方を合算。端末のデータは消さない。
+   ・シートが持たない情報（過去の「解いた日」の全履歴・各種設定）は同期できない。 */
+
+const DL_KEY_STORE = 'suite_dl_key';       // {key, school, studentNo}。キーは学生ごと・アプリ共通なので index-4/5 で共有する
+const AUTOSYNC_STORE = 'suite_autosync';   // '1'＝起動時に自動同期（index-4/5 で共有）
+const LASTSYNC_STORE = 'suite_lastsync_' + SYNC_APP_ID;
+
+// 保存済みキーは「保存したときの学校・学生番号」と今の設定が一致するときだけ使う
+// （ホームでリセットして別の学生になった場合に、前の人のキーを使わないため）
+function getSavedDlKey() {
+  try {
+    const o = JSON.parse(localStorage.getItem(DL_KEY_STORE) || 'null');
+    if (!o || !o.key) return '';
+    const st = getStudentInfo();
+    if ((o.school || '') === st.school && normalizeStudentNo(o.studentNo) === st.studentNo) return String(o.key);
+  } catch (e) {}
+  return '';
+}
+function saveDlKey(key) {
+  const st = getStudentInfo();
+  try { localStorage.setItem(DL_KEY_STORE, JSON.stringify({ key: key, school: st.school, studentNo: st.studentNo })); } catch (e) {}
+}
+function clearSavedDlKey() { try { localStorage.removeItem(DL_KEY_STORE); } catch (e) {} }
+function isAutoSyncOn() { try { return localStorage.getItem(AUTOSYNC_STORE) === '1' && !!getSavedDlKey(); } catch (e) { return false; } }
+function setAutoSync(on) { try { localStorage.setItem(AUTOSYNC_STORE, on ? '1' : '0'); } catch (e) {} }
+function markLastSync() { try { localStorage.setItem(LASTSYNC_STORE, new Date().toISOString()); } catch (e) {} }
+function fmtSyncTime(iso) {
+  const d = new Date(iso); if (isNaN(d)) return '';
+  return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+function setRestoreStatus(msg, isError) {
+  const el = document.getElementById('restore-status');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.style.color = isError ? '#c0504d' : '';
+}
+function setSyncBar(msg, isError) {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.style.color = isError ? '#c0504d' : '';
+}
+// 設定画面のチェックボックス・入力欄と、ホームの同期表示を現在の状態に合わせる
+function updateSyncUi() {
+  const saved = !!getSavedDlKey();
+  const sv = document.getElementById('restore-save-key'); if (sv) sv.checked = saved;
+  const au = document.getElementById('restore-autosync'); if (au) { au.checked = isAutoSyncOn(); au.disabled = !saved; }
+  const key = document.getElementById('restore-key');
+  if (key) key.placeholder = saved ? '保存済み（空欄のままで保存済みのキーを使います）' : 'あなたのダウンロードキー（例 ABCD-EFGH-JKMN）';
+  let last = ''; try { last = localStorage.getItem(LASTSYNC_STORE) || ''; } catch (e) {}
+  setSyncBar(!saved ? 'ダウンロードキー未保存（設定で保存すると同期できます）' : (last ? '最終同期 ' + fmtSyncTime(last) : '未同期'));
+}
+function onSaveKeyToggle(el) {
+  if (!el.checked) {
+    clearSavedDlKey(); setAutoSync(false); updateSyncUi();
+    setRestoreStatus('保存したキーを削除しました。');
+  } else if (!getSavedDlKey()) {
+    setRestoreStatus('キーを入力して「取り込む」を押すと、キーが確認できた時点でこの端末に保存されます。');
+  }
+}
+function onAutoSyncToggle(el) {
+  if (el.checked && !getSavedDlKey()) {
+    el.checked = false;
+    setRestoreStatus('先にダウンロードキーを保存してください（キーを入力し、保存にチェックして「取り込む」）。', true);
+    return;
+  }
+  setAutoSync(el.checked);
+  setRestoreStatus(el.checked ? '次回から、アプリ起動時に自動で同期します。' : '自動同期をオフにしました。');
+}
+
+// 同期の前提チェック。満たさなければ理由つきでエラーにする
+function syncPrecheck() {
+  const student = getStudentInfo();
+  if (!student.school || !student.studentNo) throw new Error('ホーム画面で「学校」と「学生番号」を設定してください。');
+  if (!SYNC_ENDPOINT || SYNC_ENDPOINT.indexOf('★') !== -1) throw new Error('送信先URLが未設定です。');
+  if (!navigator.onLine) throw new Error('オフラインです。ネットワークに接続してからやり直してください。');
+  return student;
+}
+
+// スプレッドシートからこの学生の分を取得する（失敗時は理由つきのErrorを投げる。認証エラーは err.auth=true）
+async function fetchRestoreData(key, student) {
+  let data;
+  const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  const timer = setTimeout(() => { if (ctrl) ctrl.abort(); }, 60000);
+  try {
+    const qs = new URLSearchParams({
+      action: 'restore', key: key, app: SYNC_APP_ID,
+      school: student.school, studentNo: student.studentNo
+    });
+    const res = await fetch(SYNC_ENDPOINT + '?' + qs.toString(), ctrl ? { signal: ctrl.signal } : undefined);
+    data = await res.json();
+  } catch (e) {
+    clearTimeout(timer);
+    throw new Error((e && e.name === 'AbortError')
+      ? '時間内に応答がありませんでした。通信状況を確認して、もう一度お試しください。'
+      : '取得に失敗しました。通信状況を確認するか、GASが新バージョンで再デプロイされているか確認してください。');
+  }
+  clearTimeout(timer);
+  if (!data || data.status === 'error') {
+    const err = new Error((data && data.message) || '不明なエラー');
+    err.auth = /unauthorized/.test(err.message);
+    throw err;
+  }
+  return data;
+}
+
+function buildProgressFromSheetItem(it) {
+  const rec = {
+    questionId: it.questionId,
+    correctCount: it.correctCount != null ? it.correctCount : 0,
+    incorrectCount: it.incorrectCount != null ? it.incorrectCount : 0,
+    intervalLevel: it.intervalLevel != null ? it.intervalLevel : 0,
+    lastResult: it.lastResult || null,
+    lastAnsweredAt: it.lastAnsweredAt || null,
+    nextReviewAt: it.nextReviewAt || null
+  };
+
+  // 「解いた日」の全履歴はシートに無いため、最終解答日の1件だけを復元する
+  rec.answerDays = [];
+  if (rec.lastAnsweredAt) {
+    const d = new Date(rec.lastAnsweredAt);
+    if (!isNaN(d)) rec.answerDays = [localDateStr(d)];
+  }
+  return rec;
+}
+function _tsOf(iso) {
+  if (!iso) return 0;
+  const t = new Date(iso).getTime();
+  return isNaN(t) ? 0 : t;
+}
+
+function pgPutMany(list) {
+  return new Promise((resolve, reject) => {
+    if (!list || list.length === 0) { resolve(); return; }
+    const tx = _mbdb.transaction('progress', 'readwrite'); const os = tx.objectStore('progress');
+    list.forEach(v => os.put(v));
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('書き込みが中止されました'));
+  });
+}
+function planRestore(items, mode) {
+  const plan = { progress: [], memos: [], muted: [], unmute: [], stat: { progNew: 0, progUpdate: 0, progKeep: 0 } };
+  items.forEach(it => {
+    if (!it.hasProgress) return;
+    const sheetRec = buildProgressFromSheetItem(it);
+    const local = PROGRESS[it.questionId];
+    if (!local) { plan.progress.push(sheetRec); plan.stat.progNew++; }
+    else if (_tsOf(sheetRec.lastAnsweredAt) > _tsOf(local.lastAnsweredAt)) {
+      const days = new Set(getAnswerDays(local).concat(sheetRec.answerDays));
+      sheetRec.answerDays = Array.from(days).sort().slice(-400);
+      plan.progress.push(sheetRec); plan.stat.progUpdate++;
+    } else { plan.stat.progKeep++; }
+  });
+  return plan;
+}
+function planCount(plan) { return plan.progress.length; }
+function planSummary(plan) { return '記録' + plan.progress.length + '問'; }
+async function applyRestorePlan(plan) {
+  await pgPutMany(plan.progress);
+  plan.progress.forEach(r => { PROGRESS[r.questionId] = r; });
+  refreshHome(); refreshStats();
+}
+
+// 設定画面の「取り込む」ボタン（確認ダイアログあり）。キーの入力・保存もここで行う
+async function restoreFromSheet() {
+  const btn = document.getElementById('restore-btn');
+  const keyEl = document.getElementById('restore-key');
+  const typed = keyEl ? keyEl.value.trim() : '';
+  const key = typed || getSavedDlKey();
+  if (!key) { setRestoreStatus('あなたのダウンロードキーを入力してください。', true); return; }
+  let student;
+  try { student = syncPrecheck(); } catch (e) { setRestoreStatus(e.message, true); return; }
+
+  if (btn) btn.disabled = true;
+  setRestoreStatus('スプレッドシートからデータを取得しています…（数十秒かかることがあります）');
+  let data;
+  try { data = await fetchRestoreData(key, student); }
+  catch (e) { if (btn) btn.disabled = false; setRestoreStatus('取得できませんでした：' + e.message, true); return; }
+  if (btn) btn.disabled = false;
+
+  // キーが確認できたので、保存指定があれば端末に保存する（初めて保存したときは自動同期もオンにする）
+  const sv = document.getElementById('restore-save-key');
+  if (typed && sv && sv.checked) {
+    saveDlKey(typed);
+    try { if (localStorage.getItem(AUTOSYNC_STORE) === null) setAutoSync(true); } catch (e) {}
+  }
+  if (keyEl) keyEl.value = '';
+  updateSyncUi();
+
+  if (!Array.isArray(data.items) || data.items.length === 0) {
+    setRestoreStatus('キーは確認できましたが、この学校・学生番号のデータはスプレッドシートにまだありません。' + ((typed && sv && sv.checked) ? '（キーは保存しました）' : ''));
+    return;
+  }
+  const plan = planRestore(data.items, 'safe');
+  const st = plan.stat;
+  if (planCount(plan) === 0) {
+    markLastSync(); updateSyncUi();
+    setRestoreStatus('取り込む差分はありません（端末のデータが最新です）。');
+    return;
+  }
+  const msg = '学校：' + student.school + ' ／ 学生番号：' + student.studentNo + '\n' +
+    '【解いた記録】新規 ' + st.progNew + '問、更新 ' + st.progUpdate + '問' +
+    (st.progKeep ? '（端末の方が新しいため据え置き ' + st.progKeep + '問）' : '') + '\n' +
+    '端末のデータは消さず、マージして取り込みます。実行しますか？';
+  if (!confirm(msg)) return;
+  try {
+    await applyRestorePlan(plan);
+    markLastSync(); updateSyncUi();
+    setRestoreStatus('取り込みました（' + planSummary(plan) + '）。');
+    toast('取り込みました', 3000);
+  } catch (e) {
+    console.error('restore(apply)エラー:', e);
+    setRestoreStatus('書き込み中にエラーが起きました：' + (e && e.message ? e.message : e), true);
+  }
+}
+
+// --- 同期の実行（ホームの「🔄 同期」ボタン／起動時の自動同期） ---
+// 流れ：①未送信分をシートへ送る → ②シートから最新を取得 → ③端末へマージ
+// ①が成功し、取得中に端末側の変更も無かったときだけ、メモ・出題除外もシートの内容に揃える（解除も反映）。
+// それ以外のときは「足すだけ」の安全なマージにとどめ、端末の変更を失わないようにする。
+let _syncRunning = false;
+async function runSync(trigger) {
+  if (_syncRunning) return;
+  const manual = trigger === 'button';
+  const key = getSavedDlKey();
+  if (!key) {
+    if (manual) { toast('設定でダウンロードキーを保存してください', 3000); openSettings(); }
+    return;
+  }
+  let student;
+  try { student = syncPrecheck(); }
+  catch (e) { setSyncBar(e.message, true); if (manual) toast(e.message, 3000); return; }
+
+  _syncRunning = true;
+  const btn = document.getElementById('sync-btn'); if (btn) btn.disabled = true;
+  setSyncBar('同期中…');
+  try {
+    await flushSyncQueue();
+    const seq = _localChangeSeq;
+    const data = await fetchRestoreData(key, student);
+    const clean = loadSyncQueue().length === 0 && seq === _localChangeSeq;
+    const plan = planRestore(Array.isArray(data.items) ? data.items : [], clean ? 'sync' : 'safe');
+    const n = planCount(plan);
+    if (n > 0) await applyRestorePlan(plan);
+    markLastSync(); updateSyncUi();
+    if (n > 0) toast('同期しました（' + planSummary(plan) + '）', 3000);
+    else if (manual) toast('同期しました（変更なし）', 2000);
+  } catch (e) {
+    const msg = e.auth ? 'ダウンロードキーが正しくありません。設定で入れ直してください。' : e.message;
+    setSyncBar('同期できませんでした：' + msg, true);
+    if (manual) toast('同期できませんでした', 3000);
+  } finally {
+    _syncRunning = false;
+    if (btn) btn.disabled = false;
+  }
+}
+
+// アプリ起動時：自動同期がオンなら、先にシートから最新を取り込んでから、従来の送信処理(syncOnStartup)へ進む。
+// （先に端末の古いデータを送ってしまい、シート側を古い値で上書きするのを防ぐ順番）
+let _startupSyncDone = false;
+async function startupSyncThenUpload() {
+  updateSyncUi();
+  if (!_startupSyncDone) {
+    _startupSyncDone = true;
+    if (isAutoSyncOn()) { try { await runSync('startup'); } catch (e) {} }
+  }
+  syncOnStartup();
+}
+updateSyncUi();
+
 /* ====== トースト ====== */
 let toastTimer=null;
-function toast(msg){
+function toast(msg, ms){
   const t=document.getElementById('toast');
   t.textContent=msg; t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>t.classList.remove('show'),2000);
+  toastTimer=setTimeout(()=>t.classList.remove('show'), ms||2000);
 }
 
 /* ====== 起動 ====== */
