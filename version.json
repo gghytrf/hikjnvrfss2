@@ -1,4 +1,4 @@
 {
-  "version": "2026.11.26",
+  "version": "2026.11.28",
   "note": "push 時に GitHub Actions が日付で自動生成"
 }
